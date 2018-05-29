@@ -28,6 +28,48 @@ import pprint
 from collections import deque
 
 
+class CellSetSet(object):
+  def __init__(self, cell_sets=None, strict=True):
+    self.cell_sets = set(cell_sets) if cell_sets else set()
+    self.strict = strict
+
+  def __bool__(self):
+    return bool(self.cell_sets)
+
+  def add(self, cell_set):
+    self.cell_sets.add(cell_set)
+
+  def remove(self, cell_set, strict=None):
+    if cell_set in self.cell_sets:
+      self.cell_sets.remove(cell_set)
+
+    elif strict is True or strict is None and self.strict is True:
+      raise ValueError("Cell set {} not found.".format(cell_set))
+
+  def has(self, cell_set):
+    return cell_set in self.cell_sets
+
+  def copy(self):
+    return self.__class__(self.cell_sets, self.strict)
+
+  def resolve(self, ineq_map, strict=None):
+    resolved = []
+
+    for cell_set in list(self.cell_sets):
+      ineq = ineq_map.get(cell_set)
+
+      if ineq is None:
+        if strict is not True or strict is None and self.strict is not True:
+          continue
+
+        else:
+          raise ValueError("Cell set {} is not in inequality map.".format(cell_set))
+
+      resolved.append(ineq)
+
+    return resolved
+
+
 class CellInequality(object):
   def __init__(self, cells, bounds, parents=None, children=None):
     self.cells = frozenset(cells)
@@ -38,8 +80,8 @@ class CellInequality(object):
     if self.bounds[0] > self.bounds[1]:
       raise ValueError("Cannot have min greater than max (self = {}).".format(self))
 
-    self.parents = parents or set()
-    self.children = children or set()
+    self.parents = parents or CellSetSet()
+    self.children = children or CellSetSet()
 
   @property
   def id(self):
@@ -62,30 +104,12 @@ class CellInequality(object):
   def trivial(self):
     return len(self.cells) == self.bounds[0] or self.bounds[1] == 0
 
-  # def split(self):
-  #   if len(self.cells) > 9:
-  #     return set()
-
-  #   cell_sets = [set()]
-
-  #   for x in self.cells:
-  #     for i in range(len(cell_sets)):
-  #       cell_sets.append(cell_sets[i].union({x}))
-
-  #   split_ineqs = set()
-  #   for cell_set in cell_sets[1:-1]:
-  #     new_bounds = [
-  #       max(0, self.bounds[0] - (len(self.cells) - len(cell_set))),
-  #       min(len(cell_set), self.bounds[1]),
-  #     ]
-
-  #     split_ineqs.add(CellInequality(cell_set, new_bounds))
-
-  #   return split_ineqs
-
   def cross(self, other):
     if not isinstance(other, CellInequality):
       raise ValueError("Other must be an inequality, not a {} (it is: {} )".format(type(other), other))
+
+    if self.cells == other.cells:
+      return set()
 
     if self.cells.isdisjoint(other.cells):
       return set([self, other])
@@ -112,27 +136,47 @@ class CellInequality(object):
         max(0, other.bounds[0] - shared_bounds[1]),
         min(len(other.cells) - len(shared_cells), max(0, other.bounds[1] - shared_bounds[0])),
       )
-      new_ineqs.append(CellInequality(left_cells, right_bounds))
+      new_ineqs.append(CellInequality(right_cells, right_bounds))
+
+    # if left_cells and right_cells:
+    #   combined_cells = shared_cells.union(left_cells, right_cells)
+    #   combined_bounds = (
+    #     max(0, self.bounds[0] + other.bounds[0] - len(shared_cells)),
+    #     min(self.bounds[1] + other.bounds[1], len(shared_cells) + len(left_cells) + len(right_cells)),
+    #   )
+    #   new_ineqs.append(CellInequality(combined_cells, combined_bounds))
 
     return new_ineqs
 
-  def add_parent(self, other):
-    self.parents.add(other.cells)
+  def get_cells(self, value):
+    if isinstance(value, CellInequality):
+      value_cells = value.cells
+    elif isinstance(value, frozenset):
+      value_cells = value
+    else:
+      raise ValueError("Other ('{}') must be a CellInequality or frozenset, not a {}.".format(value, type(value)))
 
-  def remove_parent(self, other):
-    if other.cells in self.parents:
-      self.parents.remove(other.cells)
+    return value_cells
+
+  def add_parent(self, other):
+    other_cells = self.get_cells(other)
+    self.parents.add(other_cells)
+
+  def remove_parent(self, other, strict=None):
+    other_cells = self.get_cells(other)
+    self.parents.remove(other_cells, strict=strict)
 
   def replace_parent(self, old, new):
     self.remove_parent(old)
     self.add_parent(new)
 
   def add_child(self, other):
-    self.children.add(other.cells)
+    other_cells = self.get_cells(other)
+    self.children.add(other_cells)
 
-  def remove_child(self, other):
-    if other.cells in self.children:
-      self.children.remove(other.cells)
+  def remove_child(self, other, strict=None):
+    other_cells = self.get_cells(other)
+    self.children.remove(other_cells, strict=strict)
 
   def replace_child(self, old, new):
     self.remove_child(old)
@@ -142,20 +186,27 @@ class CellInequality(object):
 class InequalityPoset(object):
   def __init__(self):
     self.ineqs = dict()
-    self.roots = set()
-    self.fresh_ineqs = set()
-    self.fresh_splits = set()
+    self.roots = CellSetSet()
+    self.fresh_ineqs = CellSetSet()
+    self.num_added = 0
 
   def add(self, ineq):
+    # print("add enter")
     cells = ineq.cells
+    if not cells: import ipdb; ipdb.set_trace()
 
     is_new = cells not in self.ineqs
     if not is_new:
+      if self.ineqs[cells].bounds == ineq.bounds:
+        # print("add return bounds equal")
+        return
+
+      self.num_added += 1
       new_bounds = (
         max(self.ineqs[cells].bounds[0], ineq.bounds[0]),
         min(self.ineqs[cells].bounds[1], ineq.bounds[1]),
       )
-      ineq = CellInequality(cells, new_bounds, parents=self.ineqs[cells].parents, children=self.ineqs[cells].children)
+      ineq = CellInequality(cells, new_bounds, parents=self.ineqs[cells].parents.copy(), children=self.ineqs[cells].children.copy())
 
     self.ineqs[cells] = ineq
     self.fresh_ineqs.add(cells)
@@ -163,111 +214,164 @@ class InequalityPoset(object):
     # Parent/child relationships are only based on cells, so if we already have the inequality's cells,
     # then we know its parents and children have already been determined and can return early.
     if not is_new:
+      # print("add return is_new")
       return
 
-    print("Hi?", ineq)
-    # import ipdb; ipdb.set_trace()
+    self.num_added += 1
+
+    # print("Hi?", ineq)
+    # if ineq.cells == frozenset([24]):
+    #   import ipdb; ipdb.set_trace()
 
     # determine parents and children, if any
     # A is a child of B if A.cells.issubset(B.cells)
     is_a_root = True
-    potential_parents = deque(self.roots)
+    potential_relatives = deque(self.roots.resolve(self.ineqs))
+    covered_relatives = set([ineq.cells])
 
-    while potential_parents:
-      candidate = potential_parents.popleft()
+    while potential_relatives:
+      candidate = potential_relatives.popleft()
+      # print("candidate", candidate)
+      covered_relatives.add(candidate.cells)
+
+      # case -1: candidate IS ineq
+      if candidate.cells == ineq.cells:
+        pass
 
       # case 0: candidate is disjoint with ineq
-      if candidate.cells.isdisjoint(ineq.cells):
-        continue
+      elif candidate.cells.isdisjoint(ineq.cells):
+        pass
 
       # case 1: candidate is a child of ineq
-      if candidate.cells.issubset(ineq.cells):
-        if candidate in self.roots:
-          self.roots.remove(candidate.cells)
-        break
+      elif candidate.cells.issubset(ineq.cells):
+        self.roots.remove(candidate.cells, strict=False)
+        candidate.add_parent(ineq)
+        ineq.add_child(candidate)
 
-      # case 2: candidate is a parent of ineq
-      if candidate.cells.issuperset(ineq.cells):
+        # remove duplicated parents
+        for shared_parent in CellSetSet(candidate.parents.cell_sets.intersection(ineq.parents.cell_sets)).resolve(self.ineqs):
+          candidate.remove_parent(shared_parent)
+
+      # case 2: candidate is a parent or ancestor of ineq
+      elif candidate.cells.issuperset(ineq.cells):
         is_a_root = False
         make_child = True
 
-        for child_cells in list(candidate.children):
-          child = self.ineqs[child_cells]
-          if child.cells.issubset(ineq.cells):
+        # loop through children to see if any might be a parent or ancestor
+        for child in candidate.children.resolve(self.ineqs):
+          if child.cells == ineq.cells:
+            pass
+
+          # put 'ineq' between 'child' and 'parent'
+          elif child.cells.issubset(ineq.cells):
             make_child = False
             candidate.replace_child(child, ineq)
             child.replace_parent(candidate, ineq)
             ineq.add_parent(candidate)
             ineq.add_child(child)
 
+          # 'child' is a parent or ancestor
           elif child.cells.issuperset(ineq.cells):
             make_child = False
-            potential_parents.append(child)
+            if child not in potential_relatives and child.cells not in covered_relatives:
+              potential_relatives.append(child)
+
+          # descendents of 'child' may be children of 'ineq'
+          elif not child.cells.isdisjoint(ineq.cells):
+            if child not in potential_relatives and child.cells not in covered_relatives:
+              potential_relatives.append(child)
 
         if make_child:
           candidate.add_child(ineq)
           ineq.add_parent(candidate)
 
+          # # check grandchildren to see if any are children of ineq
+          # for grandchild in set().union(*[child.children.resolve(self.ineqs) for child in candidate.children.resolve(self.ineqs)]):
+          #   if grandchild.cells.issubset(ineq.cells):
+          #     grandchild.add_parent(ineq)
+          #     ineq.add_child(grandchild)
+
+      # case 3: descendents may be children of ineq
+      elif not candidate.cells.isdisjoint(ineq.cells):
+        for child in candidate.children.resolve(self.ineqs):
+          if child.cells != ineq.cells and child not in potential_relatives and child.cells not in covered_relatives:
+            potential_relatives.append(child)
+
     if is_a_root:
-      self.roots.add(ineq)
+      self.roots.add(ineq.cells)
+    # print("add exit")
 
   def get(self, cells):
     return self.ineqs.get(cells, None)
 
   def remove(self, ineq_cells):
-    if ineq_cells in self.fresh_ineqs:
-      self.fresh_ineqs.remove(ineq_cells)
+    self.fresh_ineqs.remove(ineq_cells, strict=False)
     ineq = self.ineqs.pop(ineq_cells, None)
 
-    for parent in self.parents:
-      for child in self.children:
-        parent.replace_child(ineq, child)
-        child.replace_parent(ineq, parent)
+    if not ineq:
+      return None
+
+    for parent in ineq.parents.resolve(self.ineqs):
+      parent.remove_child(ineq)
+
+      for child in ineq.children.resolve(self.ineqs):
+        child.remove_parent(ineq)
+
+        if parent.children.cell_sets.isdisjoint(child.parent.cell_sets):
+          parent.add_child(child)
+          child.add_parent(parent)
+
+    if self.roots.has(ineq.cells):
+      self.roots.remove(ineq.cells)
+      for child in ineq.children.resolve(self.ineqs, strict=False):
+        if len(child.parents.cell_sets) <= 1:
+          self.roots.add(child.cells)
 
     return ineq
 
-  # def split_ineqs(self):
-  #   self.fresh_splits = set()
-
-  #   if self.fresh_ineqs:
-  #     ineqs_to_split = self.fresh_ineqs
-  #   else:
-  #     ineqs_to_split = self.ineqs.keys()
-  #   # ineqs_to_split = self.ineqs.keys()
-
-  #   for ineq_cells in list(ineqs_to_split):
-  #     self.fresh_splits.add(ineq_cells)
-  #     for split in self.ineqs[ineq_cells].split():
-  #       self.add(split)
-  #       self.fresh_splits.add(split.cells)
-
-  #   self.fresh_ineqs = set()
-
-  # def combine_ineqs(self):
-  #   if self.fresh_splits:
-  #     splits_cells = self.fresh_splits
-  #   else:
-  #     splits_cells = self.ineqs.keys()
-  #   # splits_cells = self.ineqs.keys()
-
-  #   for split_cells in splits_cells:
-  #     split = self.ineqs[split_cells]
-  #     for ineq in list(self.ineqs.values()):
-  #       if ineq.cells != split_cells:
-  #         for comb in ineq.combine(split):
-  #           self.add(comb)
-
   def cross_ineqs(self):
-    self.fresh_crosses = set()
-
+    # print("cross_ineqs enter")
     if self.fresh_ineqs:
       ineqs_to_cross = self.fresh_ineqs
     else:
-      ineqs_to_cross = self.ineqs.keys()
-    # ineqs_to_cross = self.ineqs.keys()
+      print("Using 'em all.")
+      ineqs_to_cross = CellSetSet(self.ineqs.keys())
 
-    for ineq_cells in ineqs_to_cross:
-      pass
+    self.num_added = 0
+
+    for ineq in ineqs_to_cross.resolve(self.ineqs):
+
+      for parent in ineq.parents.resolve(self.ineqs):
+        # cross with parents
+        for new_ineq in ineq.cross(parent):
+          self.add(new_ineq)
+
+        # cross with siblings
+        for child in parent.children.resolve(self.ineqs):
+          for new_ineq in ineq.cross(child):
+            self.add(new_ineq)
+
+        for parent2 in ineq.parents.resolve(self.ineqs):
+          # cross parents with parents
+          for new_ineq in parent.cross(parent2):
+            self.add(new_ineq)
+
+      # cross with children
+      for child in ineq.children.resolve(self.ineqs):
+        for new_ineq in ineq.cross(child):
+          self.add(new_ineq)
+
+    self.fresh_ineqs = CellSetSet()
+    # print("cross_ineqs exit")
+
+  def cross_all_pairs(self):
+    self.num_added = 0
+    resolved = CellSetSet(self.ineqs.keys()).resolve(self.ineqs)
+
+    for i, ineq_left in enumerate(resolved[:-1]):
+      for j, ineq_right in enumerate(resolved[i + 1:]):
+        for new_ineq in ineq_left.cross(ineq_right):
+          self.add(new_ineq)
 
   def find_trivial(self):
     trivial_ineqs = []
@@ -295,24 +399,31 @@ class InequalityPoset(object):
 
     marked = revealed.union(flagged)
 
-    # if not marked: import ipdb; ipdb.set_trace()
+    if not marked: import ipdb; ipdb.set_trace()
+    # if 27 in marked: import ipdb; ipdb.set_trace()
+    print("marked:", marked)
+    print("num before:", len(self.ineqs))
 
-    for ineq in list(self.ineqs.values()):
-      for trivial in trivial_ineqs:
-        if ineq.cells.issubset(marked):
-          self.remove(ineq.cells)
+    for ineq in sorted(self.ineqs.values(), key=lambda x: len(x.cells), reverse=True):
+      # import ipdb; ipdb.set_trace()
+      if ineq.cells.issubset(marked):
+        # print("issubset")
+        self.remove(ineq.cells)
 
-        elif not marked.isdisjoint(ineq.cells):
-          self.remove(ineq.cells)
-          num_flagged = len(flagged.intersection(ineq.cells))
+      elif not marked.isdisjoint(ineq.cells):
+        # print("not disjoint", ineq)
+        self.remove(ineq.cells)
+        num_flagged = len(flagged.intersection(ineq.cells))
 
-          new_cells = ineq.cells.difference(marked)
-          new_bounds = (
-            min(max(ineq.bounds[0] - num_flagged, 0), len(new_cells)),
-            min(ineq.bounds[1] - num_flagged, len(new_cells)),
-          )
+        new_cells = ineq.cells.difference(marked)
+        new_bounds = (
+          min(max(ineq.bounds[0] - num_flagged, 0), len(new_cells)),
+          min(ineq.bounds[1] - num_flagged, len(new_cells)),
+        )
 
-          self.add(CellInequality(new_cells, new_bounds))
+        self.add(CellInequality(new_cells, new_bounds))
+
+    print("num after:", len(self.ineqs))
 
 
 class Puzzle(object):
@@ -365,11 +476,19 @@ class Puzzle(object):
     while self.ineq_poset.ineqs:
 
       self.make_new_inequalities()
-      pprint.pprint([[ineq, ineq.parents, ineq.children] for ineq in self.ineq_poset.ineqs.values()])
+      # print("\n make_new_inequalities")
+      # pprint.pprint([[ineq, ineq.parents.cell_sets, ineq.children.cell_sets] for ineq in self.ineq_poset.ineqs.values()], width=160)
       # import ipdb; ipdb.set_trace()
-      IPython.embed()
-      self.ineq_poset.split_ineqs()
-      self.ineq_poset.combine_ineqs()
+      # IPython.embed()
+      self.ineq_poset.cross_ineqs()
+      # print("\n cross_ineqs")
+      # pprint.pprint([[ineq, ineq.parents.cell_sets, ineq.children.cell_sets] for ineq in self.ineq_poset.ineqs.values()], width=160)
+      # import ipdb; ipdb.set_trace()
+      # IPython.embed()
+
+      # if self.ineq_poset.num_added == 0:
+      #   print("Failed to produce new inequalities by crossing parents and children, so crossing all pairs.")
+      #   self.ineq_poset.cross_all_pairs()
 
       trivial_ineqs = self.ineq_poset.find_trivial()
 
@@ -385,7 +504,12 @@ class Puzzle(object):
           flagged_cells = sorted(list(trivial.cells))
           self.extend_unique(self.flagged, flagged_cells)
 
+      print("\n trivial")
+      print(trivial_ineqs)
+
       self.ineq_poset.reduce(trivial_ineqs)
+      # print("\n reduce")
+      # pprint.pprint([[ineq, ineq.parents.cell_sets, ineq.children.cell_sets] for ineq in self.ineq_poset.ineqs.values()], width=160)
 
       print()
       print("Revealed:", self.revealed)
@@ -428,15 +552,15 @@ def demo1():
 def demo2():
   # Combination Lock levels
 
-  # # Combination Lock I
-  # # . * . ? . .
-  # # . * . ? . .
-  # # * . * * * ?
-  # # * * . ? . .
-  # # * ? * . * .
-  # # . . . * . ?
-  # compressed = '.*.?...*.?..*.***?**.?..*?*.*....*.?'
-  # w, h = 6, 6
+  # Combination Lock I
+  # . * . ? . .
+  # . * . ? . .
+  # * . * * * ?
+  # * * . ? . .
+  # * ? * . * .
+  # . . . * . ?
+  compressed = '.*.?...*.?..*.***?**.?..*?*.*....*.?'
+  w, h = 6, 6
 
   # # Combination Lock II
   # # . * * * . *
@@ -448,19 +572,19 @@ def demo2():
   # compressed = '.***.*..*****.*..*.?.....*..*?.*.***'
   # w, h = 6, 6
 
-  # Combination Lock VI
-  # * * ? . . . . * * .
-  # * . . . * . * . . .
-  # . . . * . . . . . .
-  # * . * . ? * * . * .
-  # * * ? . * ? ? . . .
-  # . * * . ? * . ? ? .
-  # . . . . * . * * * .
-  # . . . . . . . . . .
-  # * ? * * . * . . . *
-  # * . * ? . . * * ? .
-  compressed = '**?....**.*...*.*......*......*.*.?**.*.**?.*??....**.?*.??.....*.***...........*?**.*...**.*?..**?.'
-  w, h = 10, 10
+  # # Combination Lock VI
+  # # * * ? . . . . * * .
+  # # * . . . * . * . . .
+  # # . . . * . . . . . .
+  # # * . * . ? * * . * .
+  # # * * ? . * ? ? . . .
+  # # . * * . ? * . ? ? .
+  # # . . . . * . * * * .
+  # # . . . . . . . . . .
+  # # * ? * * . * . . . *
+  # # * . * ? . . * * ? .
+  # compressed = '**?....**.*...*.*......*......*.*.?**.*.**?.*??....**.?*.??.....*.***...........*?**.*...**.*?..**?.'
+  # w, h = 10, 10
 
   board = []
 
@@ -501,7 +625,7 @@ def demo2():
 
   print('board:', board)
   print('constraints:')
-  pprint.pprint(constraints)
+  pprint.pprint(constraints, width=160)
 
   print(Puzzle(board, revealed, constraints).solve_puzzle())
 
