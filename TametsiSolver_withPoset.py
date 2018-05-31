@@ -28,13 +28,23 @@ import pprint
 from collections import deque
 
 
-class CellSetSet(object):
-  def __init__(self, cell_sets=None, strict=True):
-    self.cell_sets = set(cell_sets) if cell_sets else set()
+class CellSetDict(object):
+  def __init__(self, cell_sets=None, ineq_map=None, strict=True):
+    self.cell_set_map = dict()
     self.strict = strict
 
+    if cell_sets and ineq_map:
+      for cell_set in cell_sets:
+        self.cell_set_map[cell_set] = ineq_map[cell_set]
+
+    elif ineq_map:
+      self.cell_set_map = ineq_map.copy()
+
+    elif cell_sets and ineq_map is None:
+      raise ValueError("If 'cell_sets' is provided, then 'ineq_map' must be provided as well.")
+
   def __bool__(self):
-    return bool(self.cell_sets)
+    return bool(self.cell_set_map)
 
   def add(self, cell_set):
     self.cell_sets.add(cell_set)
@@ -47,10 +57,10 @@ class CellSetSet(object):
       raise ValueError("Cell set {} not found.".format(cell_set))
 
   def has(self, cell_set):
-    return cell_set in self.cell_sets
+    return cell_set in self.cell_set_map.keys()
 
   def copy(self):
-    return self.__class__(self.cell_sets, self.strict)
+    return self.__class__(ineq_map=self.cell_set_map, strict=self.strict)
 
   def resolve(self, ineq_map, strict=None):
     resolved = []
@@ -73,32 +83,41 @@ class CellSetSet(object):
 class CellInequality(object):
   def __init__(self, cells, bounds, parents=None, children=None):
     self.cells = frozenset(cells)
-    self.bounds = tuple(bounds)
+    self.set_bounds(bounds)
+    # self.bounds = tuple(bounds)
 
-    if self.bounds[0] < 0 or self.bounds[1] < 0:
-      raise ValueError("Cannot have negative bounds (self = {}).".format(self))
-    if self.bounds[0] > self.bounds[1]:
-      raise ValueError("Cannot have min greater than max (self = {}).".format(self))
+    # if self.bounds[0] < 0 or self.bounds[1] < 0:
+    #   raise ValueError("Cannot have negative bounds (self = {}).".format(self))
+    # if self.bounds[0] > self.bounds[1]:
+    #   raise ValueError("Cannot have min greater than max (self = {}).".format(self))
 
-    self.parents = parents or CellSetSet()
-    self.children = children or CellSetSet()
+    self.parents = parents or CellSetDict()
+    self.children = children or CellSetDict()
 
-  @property
-  def id(self):
-    return (self.cells, self.bounds)
+  # @property
+  # def id(self):
+  #   return (self.cells, self.bounds)
 
-  def __eq__(self, other):
-    if not isinstance(other, CellInequality):
-      return False
-    else:
-      return self.id == other.id
+  # def __eq__(self, other):
+  #   if not isinstance(other, CellInequality):
+  #     return False
+  #   else:
+  #     return self.id == other.id
 
-  def __hash__(self):
-    return hash(self.id)
+  # def __hash__(self):
+  #   return hash(self.id)
 
   def __repr__(self):
     return '({} with {})'.format(set(self.cells), self.bounds)
   # __repr__ = __str__
+
+  def set_bounds(self, bounds):
+    if bounds[0] < 0 or bounds[1] < 0:
+      raise ValueError("Cannot have negative bounds (bounds = {}).".format(bounds))
+    if bounds[0] > bounds[1]:
+      raise ValueError("Cannot have min greater than max (bounds = {}).".format(bounds))
+
+    self.bounds = tuple(bounds)
 
   @property
   def trivial(self):
@@ -186,8 +205,8 @@ class CellInequality(object):
 class InequalityPoset(object):
   def __init__(self):
     self.ineqs = dict()
-    self.roots = CellSetSet()
-    self.fresh_ineqs = CellSetSet()
+    self.roots = CellSetDict()
+    self.fresh_ineqs = CellSetDict()
     self.num_added = 0
 
   def add(self, ineq):
@@ -206,10 +225,11 @@ class InequalityPoset(object):
         max(self.ineqs[cells].bounds[0], ineq.bounds[0]),
         min(self.ineqs[cells].bounds[1], ineq.bounds[1]),
       )
-      ineq = CellInequality(cells, new_bounds, parents=self.ineqs[cells].parents.copy(), children=self.ineqs[cells].children.copy())
+      # ineq = CellInequality(cells, new_bounds, parents=self.ineqs[cells].parents.copy(), children=self.ineqs[cells].children.copy())
+      ineq.set_bounds(new_bounds)
 
     self.ineqs[cells] = ineq
-    self.fresh_ineqs.add(cells)
+    self.fresh_ineqs.add(ineq)
 
     # Parent/child relationships are only based on cells, so if we already have the inequality's cells,
     # then we know its parents and children have already been determined and can return early.
@@ -226,7 +246,7 @@ class InequalityPoset(object):
     # determine parents and children, if any
     # A is a child of B if A.cells.issubset(B.cells)
     is_a_root = True
-    potential_relatives = deque(self.roots.resolve(self.ineqs))
+    potential_relatives = deque(self.roots.values())
     covered_relatives = set([ineq.cells])
 
     while potential_relatives:
@@ -249,7 +269,7 @@ class InequalityPoset(object):
         ineq.add_child(candidate)
 
         # remove duplicated parents
-        for shared_parent in CellSetSet(candidate.parents.cell_sets.intersection(ineq.parents.cell_sets)).resolve(self.ineqs):
+        for shared_parent in CellSetDict(candidate.parents.cell_sets.intersection(ineq.parents.cell_sets)).values():
           candidate.remove_parent(shared_parent)
 
       # case 2: candidate is a parent or ancestor of ineq
@@ -258,7 +278,7 @@ class InequalityPoset(object):
         make_child = True
 
         # loop through children to see if any might be a parent or ancestor
-        for child in candidate.children.resolve(self.ineqs):
+        for child in candidate.children.values():
           if child.cells == ineq.cells:
             pass
 
@@ -286,14 +306,14 @@ class InequalityPoset(object):
           ineq.add_parent(candidate)
 
           # # check grandchildren to see if any are children of ineq
-          # for grandchild in set().union(*[child.children.resolve(self.ineqs) for child in candidate.children.resolve(self.ineqs)]):
+          # for grandchild in set().union(*[child.children.values() for child in candidate.children.values()]):
           #   if grandchild.cells.issubset(ineq.cells):
           #     grandchild.add_parent(ineq)
           #     ineq.add_child(grandchild)
 
       # case 3: descendents may be children of ineq
       elif not candidate.cells.isdisjoint(ineq.cells):
-        for child in candidate.children.resolve(self.ineqs):
+        for child in candidate.children.values():
           if child.cells != ineq.cells and child not in potential_relatives and child.cells not in covered_relatives:
             potential_relatives.append(child)
 
@@ -311,21 +331,21 @@ class InequalityPoset(object):
     if not ineq:
       return None
 
-    for parent in ineq.parents.resolve(self.ineqs):
+    for parent in ineq.parents.values():
       parent.remove_child(ineq)
 
-      for child in ineq.children.resolve(self.ineqs):
+      for child in ineq.children.values():
         child.remove_parent(ineq)
 
         if parent.children.cell_sets.isdisjoint(child.parent.cell_sets):
           parent.add_child(child)
           child.add_parent(parent)
 
-    if self.roots.has(ineq.cells):
-      self.roots.remove(ineq.cells)
-      for child in ineq.children.resolve(self.ineqs, strict=False):
-        if len(child.parents.cell_sets) <= 1:
-          self.roots.add(child.cells)
+    if self.roots.has(ineq, exact=False):
+      self.roots.remove(ineq)
+      for child in ineq.children.values():
+        if len(child.parents) <= 1:
+          self.roots.add(child)
 
     return ineq
 
@@ -335,43 +355,34 @@ class InequalityPoset(object):
       ineqs_to_cross = self.fresh_ineqs
     else:
       print("Using 'em all.")
-      ineqs_to_cross = CellSetSet(self.ineqs.keys())
+      ineqs_to_cross = CellSetDict(ineq_map=self.ineqs)
 
     self.num_added = 0
 
-    for ineq in ineqs_to_cross.resolve(self.ineqs):
+    for ineq in ineqs_to_cross.values():
 
-      for parent in ineq.parents.resolve(self.ineqs):
+      for parent in ineq.parents.values():
         # cross with parents
         for new_ineq in ineq.cross(parent):
           self.add(new_ineq)
 
         # cross with siblings
-        for child in parent.children.resolve(self.ineqs):
+        for child in parent.children.values():
           for new_ineq in ineq.cross(child):
             self.add(new_ineq)
 
-        for parent2 in ineq.parents.resolve(self.ineqs):
+        for parent2 in ineq.parents.values():
           # cross parents with parents
           for new_ineq in parent.cross(parent2):
             self.add(new_ineq)
 
       # cross with children
-      for child in ineq.children.resolve(self.ineqs):
+      for child in ineq.children.values():
         for new_ineq in ineq.cross(child):
           self.add(new_ineq)
 
-    self.fresh_ineqs = CellSetSet()
+    self.fresh_ineqs = CellSetDict()
     # print("cross_ineqs exit")
-
-  def cross_all_pairs(self):
-    self.num_added = 0
-    resolved = CellSetSet(self.ineqs.keys()).resolve(self.ineqs)
-
-    for i, ineq_left in enumerate(resolved[:-1]):
-      for j, ineq_right in enumerate(resolved[i + 1:]):
-        for new_ineq in ineq_left.cross(ineq_right):
-          self.add(new_ineq)
 
   def find_trivial(self):
     trivial_ineqs = []
