@@ -299,6 +299,8 @@ class InequalityPoset(object):
 
     if is_a_root:
       self.roots.add_ineq(ineq)
+
+    self.validate_all()
     # print("add exit")
 
   def get(self, cells):
@@ -416,6 +418,50 @@ class InequalityPoset(object):
 
     print("num after:", len(self.ineqs))
 
+  def validate_all(self):
+    # a heavy function for debugging purposes
+    # validates that:
+    # * there are no one-way parent-child relationships
+    # * there are no "shortcuts"
+    import ipdb
+    inconsistencies = []
+
+    ineqs = self.ineqs.values()
+    for ineq1 in ineqs:
+      for ineq2 in ineqs:
+        if ineq1.cells != ineq2.cells:
+          connected = False
+
+          if ineq2.cells in ineq1.parents.keys():
+            if ineq1.cells not in ineq2.children.keys():
+              inconsistencies.append("{} should be a child of {}".format(sorted(ineq1.cells), sorted(ineq2.cells)))
+
+            else:
+              connected = True
+              smaller = ineq1
+              larger = ineq2
+
+          elif ineq2.cells in ineq1.children.keys():
+            if ineq1.cells not in ineq2.parents.keys():
+              inconsistencies.append("{} should be a parent of {}".format(sorted(ineq1.cells), sorted(ineq2.cells)))
+
+            else:
+              connected = True
+              smaller = ineq2
+              larger = ineq1
+
+          if connected:
+            for ineq3 in ineqs:
+              if ineq3 == ineq1 or ineq3 == ineq2:
+                continue
+
+              if smaller.cells.issubset(ineq3.cells) and larger.cells.issuperset(ineq3.cells):
+                inconsistencies.append("{} and {} are connected but {} is in between them".format(sorted(smaller.cells), sorted(larger.cells), sorted(ineq3.cells)))
+
+    if inconsistencies:
+      pprint.pprint(inconsistencies, width=160)
+      ipdb.set_trace()
+
 
 class Puzzle(object):
   def __init__(self, board, revealed, constraints):
@@ -518,7 +564,7 @@ class Puzzle(object):
 
 def output_debug_graph(ineq_map):
   file = open('Tametsi_posetDebugGraph.gvz', 'w')
-  file.write('digraph G {\n')
+  file.write('digraph G {\nnode [shape=box];\n')
 
   def sort(L):
     return sorted(L, key=lambda x: len(x.cells), reverse=True)
