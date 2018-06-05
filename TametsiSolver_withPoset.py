@@ -25,7 +25,6 @@ Assumptions/conditions:
 import sys
 import IPython
 import pprint
-from collections import deque
 
 
 class CellSetDict(object):
@@ -230,11 +229,12 @@ class InequalityPoset(object):
     # determine parents and children, if any
     # A is a child of B if A.cells.issubset(B.cells)
     is_a_root = True
-    potential_relatives = deque(self.roots.values())
+    potential_relatives = self.roots.values()[:]
     covered_relatives = set([ineq.cells])
 
     while potential_relatives:
-      candidate = potential_relatives.popleft()
+      potential_relatives.sort(key=lambda x: len(x.cells))
+      candidate = potential_relatives.pop()
       # print("candidate", candidate)
       covered_relatives.add(candidate.cells)
 
@@ -246,9 +246,20 @@ class InequalityPoset(object):
       elif candidate.cells.isdisjoint(ineq.cells):
         pass
 
-      # case 1: candidate is a child of ineq
+      # case 1: candidate is a child or descendent of ineq
       elif candidate.cells.issubset(ineq.cells):
         self.roots.remove_ineq(candidate, strict=False)
+
+        # ensure candidate is not a descendent
+        is_descendent = False
+        for parent in candidate.parents.values():
+          if parent.cells.issubset(ineq.cells):
+            is_descendent = True
+            break
+
+        if is_descendent:
+          continue
+
         candidate.add_parent(ineq)
         ineq.add_child(candidate)
 
@@ -319,7 +330,11 @@ class InequalityPoset(object):
       for child in ineq.children.values():
         child.remove_parent(ineq)
 
-        if parent.children.isdisjoint(child.parents):
+        # make parent-child relationship if no line of descent exists already
+        for parent_child in parent.children.values():
+          if parent_child.cells.issuperset(child.cells):
+            break
+        else:
           parent.add_child(child)
           child.add_parent(parent)
 
@@ -571,7 +586,7 @@ def output_debug_graph(ineq_map):
 
   for ineq in sort(ineq_map.values()):
     for child in sort(ineq.children.values()):
-      file.write('"{}" -> "{}";\n'.format(ineq.cells, child.cells))
+      file.write('"{}" -> "{}";\n'.format(sorted(ineq.cells), sorted(child.cells)))
 
   file.write('}\n')
   file.close()
