@@ -25,6 +25,7 @@ Assumptions/conditions:
 import sys
 import IPython
 import pprint
+import ipdb
 
 
 class CellSetDict(object):
@@ -60,9 +61,23 @@ class CellSetDict(object):
   def intersection(self, other):
     return [self.cell_set_map[key] for key in set(self.keys()).intersection(set(other.keys()))]
 
-  def add_ineq(self, ineq):
+  def add_ineq(self, ineq, override=False):
     if ineq.cells in self.cell_set_map:
-      self.cell_set_map[ineq.cells].set_bounds(ineq.bounds)
+      old_ineq = self.cell_set_map[ineq.cells]
+
+      if not override:
+        if old_ineq.bounds == ineq.bounds:
+          return
+
+        new_bounds = (
+          max(old_ineq.bounds[0], ineq.bounds[0]),
+          min(old_ineq.bounds[1], ineq.bounds[1]),
+        )
+        old_ineq.set_bounds(new_bounds)
+
+      else:
+        old_ineq.set_bounds(ineq.bounds)
+
     else:
       self.cell_set_map[ineq.cells] = ineq
 
@@ -87,19 +102,23 @@ class CellSetDict(object):
       return self.cell_set_map.pop(ineq.cells)
 
     elif is_strict:
-      import ipdb; ipdb.set_trace()
+      # ipdb.set_trace()
       raise ValueError("Cell set {} not found.".format(ineq.cells))
 
     return None
 
   def has_ineq(self, ineq, exact=True):
-    retrieved = self.cell_set_map.get(ineq.cells)
-
-    if retrieved is None:
+    if ineq.cells not in self.keys():
       return False
 
-    elif exact:
-      return retrieved.bounds == ineq.bounds
+    else:
+      retrieved = self.cell_set_map[ineq.cells]
+
+      if exact:
+        return retrieved.bounds == ineq.bounds
+
+      else:
+        return True
 
   def copy(self):
     return self.__class__(ineq_map=self.cell_set_map, strict=self.strict)
@@ -122,6 +141,7 @@ class CellInequality(object):
     if bounds[0] > bounds[1]:
       raise ValueError("Cannot have min greater than max (bounds = {}).".format(bounds))
 
+    # if self.cells == frozenset([3, 9]): ipdb.set_trace()
     self.bounds = tuple(bounds)
 
   @property
@@ -190,47 +210,34 @@ class InequalityPoset(object):
     self.ineqs = CellSetDict()
     self.roots = CellSetDict()
     self.fresh_ineqs = CellSetDict()
-    self.num_added = 0
 
   def add(self, ineq):
     # print("add enter")
-    is_new = not self.ineqs.has_ineq(ineq)
-
-    if not is_new:
-      old_ineq = self.ineqs.get_ineq(ineq.cells)
-      if old_ineq.bounds == ineq.bounds:
-        # print("add return bounds equal")
-        return
-
-      self.num_added += 1
-
-      new_bounds = (
-        max(old_ineq.bounds[0], ineq.bounds[0]),
-        min(old_ineq.bounds[1], ineq.bounds[1]),
-      )
-      # ineq = CellInequality(cells, new_bounds, parents=self.ineqs[cells].parents.copy(), children=self.ineqs[cells].children.copy())
-      ineq.set_bounds(new_bounds)
+    # if ineq.cells == frozenset([3, 9]): ipdb.set_trace()
+    already_have_it = self.ineqs.has_ineq(ineq)
 
     self.ineqs.add_ineq(ineq)
     self.fresh_ineqs.add_ineq(ineq)
 
     # Parent/child relationships are only based on cells, so if we already have the inequality's cells,
     # then we know its parents and children have already been determined and can return early.
-    if not is_new:
-      # print("add return is_new")
+    if already_have_it:
       return
-
-    self.num_added += 1
 
     # print("Hi?", ineq)
     # if ineq.cells == frozenset([24]):
-    #   import ipdb; ipdb.set_trace()
+    #   ipdb.set_trace()
 
     # determine parents and children, if any
     # A is a child of B if A.cells.issubset(B.cells)
     is_a_root = True
     potential_relatives = self.roots.values()[:]
     covered_relatives = set([ineq.cells])
+
+    # print("validating all before while loop")
+    # self.validate_all(regex_patterns=["should be"])
+
+    if ineq.cells == frozenset({0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 24, 25, 26, 27, 28, 30, 31, 32, 33, 34}): ipdb.set_trace()
 
     while potential_relatives:
       potential_relatives.sort(key=lambda x: len(x.cells))
@@ -264,18 +271,21 @@ class InequalityPoset(object):
         ineq.add_child(candidate)
 
         # remove duplicated parents
-        for shared_parent in candidate.parents.intersection(ineq.parents):
-          candidate.remove_parent(shared_parent)
-          shared_parent.remove_child(candidate)
+        for potential_shared_parent in candidate.parents.values():
+          if potential_shared_parent.cells.issuperset(ineq.cells):
+            candidate.remove_parent(potential_shared_parent)
+            potential_shared_parent.remove_child(candidate)
 
       # case 2: candidate is a parent or ancestor of ineq
       elif candidate.cells.issuperset(ineq.cells):
         is_a_root = False
         make_child = True
+        # print("candidate:", sorted(candidate.cells))
 
         # loop through children to see if any might be a parent or ancestor
         for child in candidate.children.values():
-          if candidate.cells not in child.parents.keys() or child.cells not in candidate.children.keys(): import ipdb; ipdb.set_trace()
+          # print("  child:", sorted(child.cells))
+          if candidate.cells not in child.parents.keys() or child.cells not in candidate.children.keys(): ipdb.set_trace()
           if child.cells == ineq.cells:
             pass
 
@@ -308,10 +318,14 @@ class InequalityPoset(object):
           if child.cells != ineq.cells and child not in potential_relatives and child.cells not in covered_relatives:
             potential_relatives.append(child)
 
+      # print("Validating all within while loop")
+      # self.validate_all(regex_patterns=["should be"])
+
     if is_a_root:
       self.roots.add_ineq(ineq)
 
-    self.validate_all()
+    # print("validating all after while loop")
+    # self.validate_all()
     # print("add exit")
 
   def get(self, cells):
@@ -323,28 +337,34 @@ class InequalityPoset(object):
       return None
 
     self.fresh_ineqs.remove_ineq(ineq, strict=False)
+    parents = ineq.parents.values()
+    children = ineq.children.values()
 
-    for parent in ineq.parents.values():
+    for child in children:
+      child.remove_parent(ineq)
+
+    for parent in parents:
       parent.remove_child(ineq)
+      siblings = parent.children.values()
 
-      for child in ineq.children.values():
-        child.remove_parent(ineq)
-
+      for child in children:
         # make parent-child relationship if no line of descent exists already
-        for parent_child in parent.children.values():
-          if parent_child.cells.issuperset(child.cells):
+        for sibling in siblings:
+          if sibling.cells.issuperset(child.cells):
             break
         else:
           parent.add_child(child)
           child.add_parent(parent)
 
     if self.roots.has_ineq(ineq, exact=False):
+      print("removing from roots:", ineq)
       self.roots.remove_ineq(ineq)
-      for child in ineq.children.values():
-        if len(child.parents) <= 1:
+      for child in children:
+        print("num parents:", len(child.parents.keys()))
+        if len(child.parents) == 0:
           self.roots.add_ineq(child)
 
-    return ineq
+    # self.validate_all()
 
   def cross_ineqs(self):
     # print("cross_ineqs enter")
@@ -407,13 +427,13 @@ class InequalityPoset(object):
 
     marked = revealed.union(flagged)
 
-    if not marked: import ipdb; ipdb.set_trace()
-    # if 27 in marked: import ipdb; ipdb.set_trace()
+    if not marked: ipdb.set_trace()
+    # if 27 in marked: ipdb.set_trace()
     print("marked:", marked)
     print("num before:", len(self.ineqs))
 
     for ineq in sorted(self.ineqs.values(), key=lambda x: len(x.cells), reverse=True):
-      # import ipdb; ipdb.set_trace()
+      # ipdb.set_trace()
       if ineq.cells.issubset(marked):
         # print("issubset")
         self.remove(ineq)
@@ -432,17 +452,29 @@ class InequalityPoset(object):
         self.add(CellInequality(new_cells, new_bounds))
 
     print("num after:", len(self.ineqs))
+    print("validating all after reduce")
+    self.validate_all()
 
-  def validate_all(self):
+  def validate_all(self, regex_patterns=None):
     # a heavy function for debugging purposes
     # validates that:
     # * there are no one-way parent-child relationships
     # * there are no "shortcuts"
-    import ipdb
+    import re
     inconsistencies = []
+
+    if regex_patterns is None:
+      regex_patterns = [".*"]
+
+    if len(self.roots.keys()) == 0:
+      inconsistencies.append("No roots!")
 
     ineqs = self.ineqs.values()
     for ineq1 in ineqs:
+
+      if len(ineq1.children.keys()) == 0 and len(ineq1.parents.keys()) == 0 and len(self.ineqs.keys()) > 1:
+        inconsistencies.append("{} has no parents or children!".format(sorted(ineq1.cells)))
+
       for ineq2 in ineqs:
         if ineq1.cells != ineq2.cells:
           connected = False
@@ -474,8 +506,20 @@ class InequalityPoset(object):
                 inconsistencies.append("{} and {} are connected but {} is in between them".format(sorted(smaller.cells), sorted(larger.cells), sorted(ineq3.cells)))
 
     if inconsistencies:
-      pprint.pprint(inconsistencies, width=160)
-      ipdb.set_trace()
+      any_match = False
+
+      for i in inconsistencies:
+        for rx in regex_patterns:
+          if re.search(rx, i):
+            any_match = True
+            break
+
+        if any_match:
+          break
+
+      if any_match:
+        pprint.pprint(inconsistencies, width=160)
+        ipdb.set_trace()
 
 
 class Puzzle(object):
@@ -513,6 +557,7 @@ class Puzzle(object):
               count += 1
 
         if cells:
+          print("Adding cells {} with bounds {}".format(cells, (count, count)))
           self.ineq_poset.add(CellInequality(cells, (count, count)))
 
     self.changed = []
@@ -530,12 +575,12 @@ class Puzzle(object):
       self.make_new_inequalities()
       # print("\n make_new_inequalities")
       # pprint.pprint([[ineq, ineq.parents.cell_set_map, ineq.children.cell_set_map] for ineq in self.ineq_poset.ineqs.values()], width=160)
-      # import ipdb; ipdb.set_trace()
+      # ipdb.set_trace()
       # IPython.embed()
       self.ineq_poset.cross_ineqs()
       # print("\n cross_ineqs")
       # pprint.pprint([[ineq, ineq.parents.cell_set_map, ineq.children.cell_set_map] for ineq in self.ineq_poset.ineqs.values()], width=160)
-      # import ipdb; ipdb.set_trace()
+      # ipdb.set_trace()
       # IPython.embed()
 
       # if self.ineq_poset.num_added == 0:
@@ -569,7 +614,7 @@ class Puzzle(object):
       print("Changed:", self.changed)
       print()
 
-      # import ipdb; ipdb.set_trace()
+      # ipdb.set_trace()
 
     return (self.revealed, self.flagged, self.ineq_poset.ineqs)
 
@@ -586,7 +631,7 @@ def output_debug_graph(ineq_map):
 
   for ineq in sort(ineq_map.values()):
     for child in sort(ineq.children.values()):
-      file.write('"{}" -> "{}";\n'.format(sorted(ineq.cells), sorted(child.cells)))
+      file.write('"{}\n{}" -> "{}\n{}";\n'.format(sorted(ineq.cells), ineq.bounds, sorted(child.cells), child.bounds))
 
   file.write('}\n')
   file.close()
