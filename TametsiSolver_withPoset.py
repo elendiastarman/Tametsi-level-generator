@@ -212,6 +212,8 @@ class InequalityPoset(object):
     self.fresh_ineqs = CellSetDict()
 
   def add(self, ineq):
+    if ineq.bounds[0] != ineq.bounds[1]:
+      return
     # print("add enter")
     # if ineq.cells == frozenset([3, 9]): ipdb.set_trace()
     already_have_it = self.ineqs.has_ineq(ineq)
@@ -378,6 +380,8 @@ class InequalityPoset(object):
       ineqs_to_cross = CellSetDict(ineq_map=self.ineqs)
 
     self.num_added = 0
+    before = len(self.ineqs)
+    print("num before cross:", before)
 
     for ineq in ineqs_to_cross.values():
 
@@ -402,6 +406,12 @@ class InequalityPoset(object):
           self.add(new_ineq)
 
     self.fresh_ineqs = CellSetDict()
+    after = len(self.ineqs)
+    print("num after cross:", after)
+
+    # if before == after:
+    #   self.validate_all()
+    #   ipdb.set_trace()
     # print("cross_ineqs exit")
 
   def find_trivial(self):
@@ -433,7 +443,8 @@ class InequalityPoset(object):
     # if not marked: ipdb.set_trace()
     # if 27 in marked: ipdb.set_trace()
     print("marked:", marked)
-    print("num before:", len(self.ineqs))
+    before = len(self.ineqs)
+    print("num before reduce:", before)
 
     for ineq in sorted(self.ineqs.values(), key=lambda x: len(x.cells), reverse=True):
       # ipdb.set_trace()
@@ -454,7 +465,8 @@ class InequalityPoset(object):
 
         self.add(CellInequality(new_cells, new_bounds))
 
-    print("num after:", len(self.ineqs))
+    after = len(self.ineqs)
+    print("num after reduce:", after)
     # print("validating all after reduce")
     # self.validate_all()
 
@@ -669,15 +681,15 @@ def demo1():
 def demo2():
   # Combination Lock levels
 
-  # Combination Lock I
-  # . * . ? . .
-  # . * . ? . .
-  # * . * * * ?
-  # * * . ? . .
-  # * ? * . * .
-  # . . . * . ?
-  compressed = '.*.?...*.?..*.***?**.?..*?*.*....*.?'
-  w, h = 6, 6
+  # # Combination Lock I
+  # # . * . ? . .
+  # # . * . ? . .
+  # # * . * * * ?
+  # # * * . ? . .
+  # # * ? * . * .
+  # # . . . * . ?
+  # compressed = '.*.?...*.?..*.***?**.?..*?*.*....*.?'
+  # w, h = 6, 6
 
   # # Combination Lock II
   # # . * * * . *
@@ -689,19 +701,19 @@ def demo2():
   # compressed = '.***.*..*****.*..*.?.....*..*?.*.***'
   # w, h = 6, 6
 
-  # # Combination Lock VI
-  # # * * ? . . . . * * .
-  # # * . . . * . * . . .
-  # # . . . * . . . . . .
-  # # * . * . ? * * . * .
-  # # * * ? . * ? ? . . .
-  # # . * * . ? * . ? ? .
-  # # . . . . * . * * * .
-  # # . . . . . . . . . .
-  # # * ? * * . * . . . *
-  # # * . * ? . . * * ? .
-  # compressed = '**?....**.*...*.*......*......*.*.?**.*.**?.*??....**.?*.??.....*.***...........*?**.*...**.*?..**?.'
-  # w, h = 10, 10
+  # Combination Lock VI
+  # * * ? . . . . * * .
+  # * . . . * . * . . .
+  # . . . * . . . . . .
+  # * . * . ? * * . * .
+  # * * ? . * ? ? . . .
+  # . * * . ? * . ? ? .
+  # . . . . * . * * * .
+  # . . . . . . . . . .
+  # * ? * * . * . . . *
+  # * . * ? . . * * ? .
+  compressed = '**?....**.*...*.*......*......*.*.?**.*.**?.*??....**.?*.??.....*.***...........*?**.*...**.*?..**?.'
+  w, h = 10, 10
 
   board = []
 
