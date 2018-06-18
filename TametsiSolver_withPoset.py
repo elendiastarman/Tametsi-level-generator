@@ -148,7 +148,11 @@ class CellInequality(object):
   def trivial(self):
     return len(self.cells) == self.bounds[0] or self.bounds[1] == 0
 
-  def cross(self, other):
+  @property
+  def exact(self):
+    return self.bounds[0] == self.bounds[1]
+
+  def cross(self, other, max_cells=9, max_mines=3):
     if not isinstance(other, CellInequality):
       raise ValueError("Other must be an inequality, not a {} (it is: {} )".format(type(other), other))
 
@@ -157,6 +161,9 @@ class CellInequality(object):
 
     if self.cells.isdisjoint(other.cells):
       return set([self, other])
+
+    if len(self.cells) > max_cells and self.bounds[0] > max_mines or len(other.cells) > max_cells and other.bounds[0] > max_mines:
+      return set()
 
     shared_cells = self.cells.intersection(other.cells)
     shared_bounds = (
@@ -211,8 +218,8 @@ class InequalityPoset(object):
     self.roots = CellSetDict()
     self.fresh_ineqs = CellSetDict()
 
-  def add(self, ineq):
-    if ineq.bounds[0] != ineq.bounds[1]:
+  def add(self, ineq, add_inexact=True):
+    if not add_inexact and not ineq.exact:
       return
     # print("add enter")
     # if ineq.cells == frozenset([3, 9]): ipdb.set_trace()
@@ -371,48 +378,68 @@ class InequalityPoset(object):
     # print("validating all after remove")
     # self.validate_all()
 
-  def cross_ineqs(self):
-    # print("cross_ineqs enter")
+  def cross_immediate_relatives(self, add_inexact=True):
     if self.fresh_ineqs:
       ineqs_to_cross = self.fresh_ineqs
     else:
       print("Using 'em all.")
       ineqs_to_cross = CellSetDict(ineq_map=self.ineqs)
 
-    self.num_added = 0
     before = len(self.ineqs)
-    print("num before cross:", before)
 
     for ineq in ineqs_to_cross.values():
 
       for parent in ineq.parents.values():
         # cross with parents
         for new_ineq in ineq.cross(parent):
-          self.add(new_ineq)
+          self.add(new_ineq, add_inexact)
 
         # cross with siblings
         for child in parent.children.values():
           for new_ineq in ineq.cross(child):
-            self.add(new_ineq)
+            self.add(new_ineq, add_inexact)
 
         for parent2 in ineq.parents.values():
           # cross parents with parents
           for new_ineq in parent.cross(parent2):
-            self.add(new_ineq)
+            self.add(new_ineq, add_inexact)
 
       # cross with children
       for child in ineq.children.values():
         for new_ineq in ineq.cross(child):
-          self.add(new_ineq)
+          self.add(new_ineq, add_inexact)
 
-    self.fresh_ineqs = CellSetDict()
     after = len(self.ineqs)
-    print("num after cross:", after)
+    if before != after:
+      self.fresh_ineqs = CellSetDict()
 
-    # if before == after:
-    #   self.validate_all()
-    #   ipdb.set_trace()
-    # print("cross_ineqs exit")
+  def cross_all(self, add_inexact=True):
+    if self.fresh_ineqs:
+      ineqs_to_cross = self.fresh_ineqs
+    else:
+      print("Using 'em all.")
+      ineqs_to_cross = CellSetDict(ineq_map=self.ineqs)
+
+    before = len(self.ineqs)
+
+    ineqs1 = sorted(ineqs_to_cross.values(), key=lambda x: sorted(x.cells))
+    ineqs2 = sorted(self.ineqs.values(), key=lambda x: sorted(x.cells))
+
+    for ineq1 in ineqs1:
+      print("ineq1:", ineq1)
+      for ineq2 in ineqs2:
+        if sorted(ineq2.cells) < sorted(ineq1.cells):
+          continue
+
+        # print("ineq1, ineq2:", ineq1, ineq2)
+
+        for new_ineq in ineq1.cross(ineq2):
+          # print("adding", new_ineq)
+          self.add(new_ineq, add_inexact)
+
+    after = len(self.ineqs)
+    if before != after:
+      self.fresh_ineqs = CellSetDict()
 
   def find_trivial(self):
     trivial_ineqs = []
@@ -443,8 +470,7 @@ class InequalityPoset(object):
     # if not marked: ipdb.set_trace()
     # if 27 in marked: ipdb.set_trace()
     print("marked:", marked)
-    before = len(self.ineqs)
-    print("num before reduce:", before)
+    # before = len(self.ineqs)
 
     for ineq in sorted(self.ineqs.values(), key=lambda x: len(x.cells), reverse=True):
       # ipdb.set_trace()
@@ -465,8 +491,7 @@ class InequalityPoset(object):
 
         self.add(CellInequality(new_cells, new_bounds))
 
-    after = len(self.ineqs)
-    print("num after reduce:", after)
+    # after = len(self.ineqs)
     # print("validating all after reduce")
     # self.validate_all()
 
@@ -548,6 +573,7 @@ class Puzzle(object):
     self.constraints = self.convert_constraints(constraints)
     self.flagged = []
     self.changed = []
+    self.rounds = []
 
   def convert_constraints(self, constraints):
     for constraint in constraints:
@@ -584,25 +610,46 @@ class Puzzle(object):
       if x not in list1:
         list1.append(x)
 
+  def record_stage(self, func, *args, **kwargs):
+    name = func.__name__
+    before = len(self.ineq_poset.ineqs)
+    print("before {} (with args {} and kwargs {}): {}".format(name, args, kwargs, before))
+
+    func(*args, **kwargs)
+
+    after = len(self.ineq_poset.ineqs)
+    print("after {} (with args {} and kwargs {}): {}".format(name, args, kwargs, after))
+    diff = after - before
+    self.rounds[-1][name] = [before, after, diff]
+
+    return diff
+
   def solve_puzzle(self):
     self.changed = self.revealed[:]
 
     while self.ineq_poset.ineqs:
+      self.rounds.append({})
+      total_diff = 0
 
-      self.make_new_inequalities()
+      total_diff += abs(self.record_stage(self.make_new_inequalities))
       # print("\n make_new_inequalities")
       # pprint.pprint([[ineq, ineq.parents.cell_set_map, ineq.children.cell_set_map] for ineq in self.ineq_poset.ineqs.values()], width=160)
       # ipdb.set_trace()
       # IPython.embed()
-      self.ineq_poset.cross_ineqs()
+      total_diff += abs(self.record_stage(self.ineq_poset.cross_immediate_relatives, add_inexact=False))
+
+      if total_diff == 0:
+        total_diff += abs(self.record_stage(self.ineq_poset.cross_immediate_relatives, add_inexact=True))
+
+      if total_diff == 0:
+        total_diff += abs(self.record_stage(self.ineq_poset.cross_all, add_inexact=False))
+
+      if total_diff == 0:
+        total_diff += abs(self.record_stage(self.ineq_poset.cross_all, add_inexact=True))
       # print("\n cross_ineqs")
       # pprint.pprint([[ineq, ineq.parents.cell_set_map, ineq.children.cell_set_map] for ineq in self.ineq_poset.ineqs.values()], width=160)
       # ipdb.set_trace()
       # IPython.embed()
-
-      # if self.ineq_poset.num_added == 0:
-      #   print("Failed to produce new inequalities by crossing parents and children, so crossing all pairs.")
-      #   self.ineq_poset.cross_all_pairs()
 
       trivial_ineqs = self.ineq_poset.find_trivial()
 
@@ -621,7 +668,7 @@ class Puzzle(object):
       print("\n trivial")
       print(trivial_ineqs)
 
-      self.ineq_poset.reduce(trivial_ineqs)
+      total_diff += abs(self.record_stage(self.ineq_poset.reduce, trivial_ineqs))
       # print("\n reduce")
       # pprint.pprint([[ineq, ineq.parents.cell_set_map, ineq.children.cell_set_map] for ineq in self.ineq_poset.ineqs.values()], width=160)
 
@@ -681,39 +728,44 @@ def demo1():
 def demo2():
   # Combination Lock levels
 
-  # # Combination Lock I
-  # # . * . ? . .
-  # # . * . ? . .
-  # # * . * * * ?
-  # # * * . ? . .
-  # # * ? * . * .
-  # # . . . * . ?
-  # compressed = '.*.?...*.?..*.***?**.?..*?*.*....*.?'
-  # w, h = 6, 6
+  level = 6
 
-  # # Combination Lock II
-  # # . * * * . *
-  # # . . * * * *
-  # # * . * . . *
-  # # . ? . . . .
-  # # . * . . * ?
-  # # . * . * * *
-  # compressed = '.***.*..*****.*..*.?.....*..*?.*.***'
-  # w, h = 6, 6
+  if level == 1:
+    # Combination Lock I
+    # . * . ? . .
+    # . * . ? . .
+    # * . * * * ?
+    # * * . ? . .
+    # * ? * . * .
+    # . . . * . ?
+    compressed = '.*.?...*.?..*.***?**.?..*?*.*....*.?'
+    w, h = 6, 6
 
-  # Combination Lock VI
-  # * * ? . . . . * * .
-  # * . . . * . * . . .
-  # . . . * . . . . . .
-  # * . * . ? * * . * .
-  # * * ? . * ? ? . . .
-  # . * * . ? * . ? ? .
-  # . . . . * . * * * .
-  # . . . . . . . . . .
-  # * ? * * . * . . . *
-  # * . * ? . . * * ? .
-  compressed = '**?....**.*...*.*......*......*.*.?**.*.**?.*??....**.?*.??.....*.***...........*?**.*...**.*?..**?.'
-  w, h = 10, 10
+  elif level == 2:
+    # Combination Lock II
+    # . * * * . *
+    # . . * * * *
+    # * . * . . *
+    # . ? . . . .
+    # . * . . * ?
+    # . * . * * *
+    compressed = '.***.*..*****.*..*.?.....*..*?.*.***'
+    w, h = 6, 6
+
+  elif level == 6:
+    # Combination Lock VI
+    # * * ? . . . . * * .
+    # * . . . * . * . . .
+    # . . . * . . . . . .
+    # * . * . ? * * . * .
+    # * * ? . * ? ? . . .
+    # . * * . ? * . ? ? .
+    # . . . . * . * * * .
+    # . . . . . . . . . .
+    # * ? * * . * . . . *
+    # * . * ? . . * * ? .
+    compressed = '**?....**.*...*.*......*......*.*.?**.*.**?.*??....**.?*.??.....*.***...........*?**.*...**.*?..**?.'
+    w, h = 10, 10
 
   board = []
 
