@@ -25,7 +25,7 @@ Assumptions/conditions:
 import sys
 import IPython
 import pprint
-import ipdb
+# import ipdb
 
 
 class CellInequality(object):
@@ -249,7 +249,7 @@ class CellSetDict(object):
     return self.__class__(ineq_map=self.cell_set_map, strict=self.strict)
 
 
-class InequalityPoset(object):
+class InequalitySet(object):
   def __init__(self):
     self.ineqs = CellSetDict()
     self.roots = CellSetDict()
@@ -257,8 +257,9 @@ class InequalityPoset(object):
 
   def add(self, ineq, add_inexact=True):
     if add_inexact or ineq.exact:
-      self.ineqs.add_ineq(ineq)
-      self.fresh_ineqs.add_ineq(ineq)
+      if not self.ineqs.has_ineq(ineq):
+        self.ineqs.add_ineq(ineq)
+        self.fresh_ineqs.add_ineq(ineq)
 
   def get(self, cells):
     return self.ineqs.get(cells, None)
@@ -348,7 +349,7 @@ class Puzzle(object):
   def __init__(self, board, revealed, constraints):
     self.board = board
     self.revealed = revealed
-    self.ineq_poset = InequalityPoset()
+    self.ineq_set = InequalitySet()
     self.constraints = self.convert_constraints(constraints)
     self.flagged = []
     self.changed = []
@@ -364,7 +365,7 @@ class Puzzle(object):
           cells.append(c)
 
       if cells:
-        self.ineq_poset.add(CellInequality(cells, (count, count)))
+        self.ineq_set.add(CellInequality(cells, (count, count)))
 
   def make_new_inequalities(self):
     for c in self.changed:
@@ -380,7 +381,7 @@ class Puzzle(object):
               count += 1
 
         if cells:
-          self.ineq_poset.add(CellInequality(cells, (count, count)))
+          self.ineq_set.add(CellInequality(cells, (count, count)))
 
     self.changed = []
 
@@ -391,12 +392,12 @@ class Puzzle(object):
 
   def record_stage(self, func, *args, **kwargs):
     name = func.__name__
-    before = len(self.ineq_poset.ineqs)
+    before = len(self.ineq_set.ineqs)
     print("before {} (with args {} and kwargs {}): {}".format(name, args, kwargs, before))
 
     func(*args, **kwargs)
 
-    after = len(self.ineq_poset.ineqs)
+    after = len(self.ineq_set.ineqs)
     print("after {} (with args {} and kwargs {}): {}".format(name, args, kwargs, after))
     diff = after - before
     self.rounds[-1][name] = [before, after, diff]
@@ -405,20 +406,21 @@ class Puzzle(object):
 
   def solve_puzzle(self):
     self.changed = self.revealed[:]
+    total_diff = 1
 
-    while self.ineq_poset.ineqs:
+    while self.ineq_set.ineqs and total_diff > 0:
       self.rounds.append({})
       total_diff = 0
 
       total_diff += abs(self.record_stage(self.make_new_inequalities))
-      total_diff += abs(self.record_stage(self.ineq_poset.cross_all, add_inexact=False))
+      total_diff += abs(self.record_stage(self.ineq_set.cross_all, add_inexact=False))
 
       if total_diff > 0:
-        self.ineq_poset.purge(lambda x: not x.exact)
+        self.record_stage(self.ineq_set.purge, lambda x: not x.exact)
       else:
-        total_diff += abs(self.record_stage(self.ineq_poset.cross_all, add_inexact=True))
+        total_diff += abs(self.record_stage(self.ineq_set.cross_all, add_inexact=True))
 
-      trivial_ineqs = self.ineq_poset.find_trivial()
+      trivial_ineqs = self.ineq_set.find_trivial()
 
       for trivial in trivial_ineqs:
         if trivial.bounds[0] == 0:
@@ -435,7 +437,7 @@ class Puzzle(object):
       print("\n trivial")
       print(trivial_ineqs)
 
-      total_diff += abs(self.record_stage(self.ineq_poset.reduce, trivial_ineqs))
+      total_diff += abs(self.record_stage(self.ineq_set.reduce, trivial_ineqs))
 
       print()
       print("Revealed:", self.revealed)
@@ -443,7 +445,7 @@ class Puzzle(object):
       print("Changed:", self.changed)
       print()
 
-    return (self.revealed, self.flagged, self.ineq_poset.ineqs)
+    return (self.revealed, self.flagged, self.ineq_set.ineqs)
 
 
 def demo1():
