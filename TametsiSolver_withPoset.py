@@ -28,6 +28,134 @@ import pprint
 import ipdb
 
 
+class CellInequality(object):
+  def __init__(self, cells, bounds, parents=None, children=None):
+    if hasattr(cells, '__iter__'):
+      temp = 0
+      for x in cells:
+        temp += 2 ** x
+      cells = temp
+
+    self.cells = cells
+    self.num = bin(cells).count('1')
+    self.set_bounds(bounds)
+    self.parents = parents or CellSetDict()
+    self.children = children or CellSetDict()
+
+  def __repr__(self):
+    return '({} with {})'.format(self.cell_nums, self.bounds)
+  # __repr__ = __str__
+
+  def set_bounds(self, bounds):
+    if bounds[0] < 0 or bounds[1] < 0:
+      raise ValueError("Cannot have negative bounds (bounds = {}).".format(bounds))
+    if bounds[0] > bounds[1]:
+      raise ValueError("Cannot have min greater than max (bounds = {}).".format(bounds))
+
+    # if self.cells == frozenset([3, 9]): ipdb.set_trace()
+    self.bounds = tuple(bounds)
+
+  @property
+  def trivial(self):
+    return self.num == self.bounds[0] or self.bounds[1] == 0
+
+  @property
+  def exact(self):
+    return self.bounds[0] == self.bounds[1]
+
+  @property
+  def cell_nums(self):
+    nums = set()
+    temp = self.cells
+
+    i, j = 0, 1
+    while j <= temp:
+      if j & temp:
+        nums.add(i)
+
+      i, j = i + 1, j * 2
+
+    return nums
+
+  def isdisjoint(self, other):
+    if not isinstance(other, CellInequality):
+      raise ValueError("Other must be an inequality, not a {} (it is: {} )".format(type(other), other))
+
+    return self.cells & other.cells == 0
+
+  def issubset(self, other):
+    if not isinstance(other, CellInequality):
+      raise ValueError("Other must be an inequality, not a {} (it is: {} )".format(type(other), other))
+
+    return self.cells & other.cells == self.cells
+
+  def issuperset(self, other):
+    if not isinstance(other, CellInequality):
+      raise ValueError("Other must be an inequality, not a {} (it is: {} )".format(type(other), other))
+
+    return self.cells & other.cells == other.cells
+
+  def cross(self, other, max_cells=9, max_mines=3):
+    if not isinstance(other, CellInequality):
+      raise ValueError("Other must be an inequality, not a {} (it is: {} )".format(type(other), other))
+
+    if self.cells == other.cells:
+      return set()
+
+    if self.isdisjoint(other):
+      return set([self, other])
+
+    if self.num > max_cells and self.bounds[0] > max_mines or other.num > max_cells and other.bounds[0] > max_mines:
+      return set()
+
+    shared_cells = self.cells & other.cells
+    shared_num = bin(shared_cells).count('1')
+    shared_bounds = (
+      max(0, self.bounds[0] - self.num + shared_num, other.bounds[0] - other.num + shared_num),
+      min(shared_num, self.bounds[1], other.bounds[1]),
+    )
+
+    new_ineqs = [CellInequality(shared_cells, shared_bounds)]
+
+    left_cells = self.cells & ~shared_cells
+    if left_cells:
+      left_bounds = (
+        max(0, self.bounds[0] - shared_bounds[1]),
+        min(self.num - shared_num, max(0, self.bounds[1] - shared_bounds[0])),
+      )
+      new_ineqs.append(CellInequality(left_cells, left_bounds))
+
+    right_cells = other.cells & ~shared_cells
+    if right_cells:
+      right_bounds = (
+        max(0, other.bounds[0] - shared_bounds[1]),
+        min(other.num - shared_num, max(0, other.bounds[1] - shared_bounds[0])),
+      )
+      new_ineqs.append(CellInequality(right_cells, right_bounds))
+
+    return new_ineqs
+
+  def add_parent(self, other):
+    self.parents.add_ineq(other)
+
+  def remove_parent(self, other, strict=None):
+    self.parents.remove_ineq(other, strict=strict)
+
+  def replace_parent(self, old, new, strict=None):
+    self.remove_parent(old, strict=strict)
+    self.add_parent(new)
+
+  def add_child(self, other):
+    self.children.add_ineq(other)
+
+  def remove_child(self, other, strict=None):
+    self.children.remove_ineq(other, strict=strict)
+
+  def replace_child(self, old, new, strict=None):
+    self.remove_child(old, strict=strict)
+    self.add_child(new)
+
+
 class CellSetDict(object):
   def __init__(self, cell_sets=None, ineq_map=None, strict=True):
     self.cell_set_map = dict()
@@ -124,94 +252,6 @@ class CellSetDict(object):
     return self.__class__(ineq_map=self.cell_set_map, strict=self.strict)
 
 
-class CellInequality(object):
-  def __init__(self, cells, bounds, parents=None, children=None):
-    self.cells = frozenset(cells)
-    self.set_bounds(bounds)
-    self.parents = parents or CellSetDict()
-    self.children = children or CellSetDict()
-
-  def __repr__(self):
-    return '({} with {})'.format(sorted(self.cells), self.bounds)
-  # __repr__ = __str__
-
-  def set_bounds(self, bounds):
-    if bounds[0] < 0 or bounds[1] < 0:
-      raise ValueError("Cannot have negative bounds (bounds = {}).".format(bounds))
-    if bounds[0] > bounds[1]:
-      raise ValueError("Cannot have min greater than max (bounds = {}).".format(bounds))
-
-    # if self.cells == frozenset([3, 9]): ipdb.set_trace()
-    self.bounds = tuple(bounds)
-
-  @property
-  def trivial(self):
-    return len(self.cells) == self.bounds[0] or self.bounds[1] == 0
-
-  @property
-  def exact(self):
-    return self.bounds[0] == self.bounds[1]
-
-  def cross(self, other, max_cells=9, max_mines=3):
-    if not isinstance(other, CellInequality):
-      raise ValueError("Other must be an inequality, not a {} (it is: {} )".format(type(other), other))
-
-    if self.cells == other.cells:
-      return set()
-
-    if self.cells.isdisjoint(other.cells):
-      return set([self, other])
-
-    if len(self.cells) > max_cells and self.bounds[0] > max_mines or len(other.cells) > max_cells and other.bounds[0] > max_mines:
-      return set()
-
-    shared_cells = self.cells.intersection(other.cells)
-    shared_bounds = (
-      max(0, self.bounds[0] - len(self.cells) + len(shared_cells), other.bounds[0] - len(other.cells) + len(shared_cells)),
-      min(len(shared_cells), self.bounds[1], other.bounds[1]),
-    )
-
-    new_ineqs = [CellInequality(shared_cells, shared_bounds)]
-
-    left_cells = self.cells.difference(shared_cells)
-    if left_cells:
-      left_bounds = (
-        max(0, self.bounds[0] - shared_bounds[1]),
-        min(len(self.cells) - len(shared_cells), max(0, self.bounds[1] - shared_bounds[0])),
-      )
-      new_ineqs.append(CellInequality(left_cells, left_bounds))
-
-    right_cells = other.cells.difference(shared_cells)
-    if right_cells:
-      right_bounds = (
-        max(0, other.bounds[0] - shared_bounds[1]),
-        min(len(other.cells) - len(shared_cells), max(0, other.bounds[1] - shared_bounds[0])),
-      )
-      new_ineqs.append(CellInequality(right_cells, right_bounds))
-
-    return new_ineqs
-
-  def add_parent(self, other):
-    self.parents.add_ineq(other)
-
-  def remove_parent(self, other, strict=None):
-    self.parents.remove_ineq(other, strict=strict)
-
-  def replace_parent(self, old, new, strict=None):
-    self.remove_parent(old, strict=strict)
-    self.add_parent(new)
-
-  def add_child(self, other):
-    self.children.add_ineq(other)
-
-  def remove_child(self, other, strict=None):
-    self.children.remove_ineq(other, strict=strict)
-
-  def replace_child(self, old, new, strict=None):
-    self.remove_child(old, strict=strict)
-    self.add_child(new)
-
-
 class InequalityPoset(object):
   def __init__(self):
     self.ineqs = CellSetDict()
@@ -238,7 +278,7 @@ class InequalityPoset(object):
     #   ipdb.set_trace()
 
     # determine parents and children, if any
-    # A is a child of B if A.cells.issubset(B.cells)
+    # A is a child of B if A.issubset(B)
     # print("ineq:", ineq)
     is_a_root = True
     potential_relatives = self.roots.values()[:]
@@ -250,7 +290,7 @@ class InequalityPoset(object):
     # if ineq.cells == frozenset({0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 24, 25, 26, 27, 28, 30, 31, 32, 33, 34}): ipdb.set_trace()
 
     while potential_relatives:
-      potential_relatives.sort(key=lambda x: len(x.cells))
+      potential_relatives.sort(key=lambda x: x.num)
       candidate = potential_relatives.pop()
       # print("candidate", candidate)
       covered_relatives.add(candidate.cells)
@@ -260,17 +300,17 @@ class InequalityPoset(object):
         continue
 
       # case 0: candidate is disjoint with ineq
-      elif candidate.cells.isdisjoint(ineq.cells):
+      elif candidate.isdisjoint(ineq) == 0:
         continue
 
       # case 1: candidate is a child or descendent of ineq
-      elif candidate.cells.issubset(ineq.cells):
+      elif candidate.issubset(ineq):
         self.roots.remove_ineq(candidate, strict=False)
 
         # ensure candidate is not a descendent
         is_descendent = False
         for parent in candidate.parents.values():
-          if parent.cells.issubset(ineq.cells):
+          if parent.issubset(ineq):
             is_descendent = True
             break
 
@@ -282,25 +322,25 @@ class InequalityPoset(object):
 
         # remove duplicated parents
         for potential_shared_parent in candidate.parents.values():
-          if potential_shared_parent.cells != ineq.cells and potential_shared_parent.cells.issuperset(ineq.cells):
+          if potential_shared_parent.cells != ineq.cells and potential_shared_parent.issuperset(ineq):
             candidate.remove_parent(potential_shared_parent)
             potential_shared_parent.remove_child(candidate)
 
       # case 2: candidate is a parent or ancestor of ineq
-      elif candidate.cells.issuperset(ineq.cells):
+      elif candidate.issuperset(ineq):
         is_a_root = False
         make_child = True
-        # print("candidate:", sorted(candidate.cells))
+        # print("candidate:", candidate.cell_nums)
 
         # loop through children to see if any might be a parent or ancestor
         for child in candidate.children.values():
-          # print("  child:", sorted(child.cells))
+          # print("  child:", child.cell_nums)
           # if candidate.cells not in child.parents.keys() or child.cells not in candidate.children.keys(): ipdb.set_trace()
           if child.cells == ineq.cells:
             pass
 
           # put 'ineq' between 'child' and 'parent'
-          elif child.cells.issubset(ineq.cells):
+          elif child.issubset(ineq):
             make_child = False
             candidate.replace_child(child, ineq)
             child.replace_parent(candidate, ineq)
@@ -308,13 +348,13 @@ class InequalityPoset(object):
             ineq.add_child(child)
 
           # 'child' is a parent or ancestor
-          elif child.cells.issuperset(ineq.cells):
+          elif child.issuperset(ineq):
             make_child = False
             if child not in potential_relatives and child.cells not in covered_relatives:
               potential_relatives.append(child)
 
           # descendents of 'child' may be children of 'ineq'
-          elif not child.cells.isdisjoint(ineq.cells):
+          elif not child.isdisjoint(ineq):
             if child not in potential_relatives and child.cells not in covered_relatives:
               potential_relatives.append(child)
 
@@ -323,7 +363,7 @@ class InequalityPoset(object):
           ineq.add_parent(candidate)
 
       # case 3: descendents may be children of ineq
-      elif not candidate.cells.isdisjoint(ineq.cells):
+      elif not candidate.isdisjoint(ineq):
         for child in candidate.children.values():
           if child.cells != ineq.cells and child not in potential_relatives:  # and child.cells not in covered_relatives:
             potential_relatives.append(child)
@@ -361,7 +401,7 @@ class InequalityPoset(object):
       for child in children:
         # make parent-child relationship if no line of descent exists already
         for sibling in siblings:
-          if sibling.cells.issuperset(child.cells):
+          if sibling.issuperset(child):
             break
         else:
           parent.add_child(child)
@@ -422,7 +462,7 @@ class InequalityPoset(object):
 
     before = len(self.ineqs)
 
-    ineqs_to_cross = sorted(ineqs_to_cross.values(), key=lambda x: sorted(x.cells))
+    ineqs_to_cross = sorted(ineqs_to_cross.values(), key=lambda x: x.num)
 
     for ineq1 in ineqs_to_cross:
       print("ineq1:", ineq1)
@@ -430,10 +470,10 @@ class InequalityPoset(object):
       candidates = self.roots.values()[:]
 
       while candidates:
-        candidates.sort(key=lambda x: len(x.cells))
+        candidates.sort(key=lambda x: x.num)
         candidate = candidates.pop()
 
-        if not ineq1.cells.superset(candidate.cells) and not ineq1.cells.subset(candidate.cells):
+        if not ineq1.issuperset(candidate) and not ineq1.issubset(candidate):
           continue
 
         for new_ineq in ineq1.cross(candidate):
@@ -454,13 +494,13 @@ class InequalityPoset(object):
 
     before = len(self.ineqs)
 
-    ineqs1 = sorted(ineqs_to_cross.values(), key=lambda x: sorted(x.cells))
-    ineqs2 = sorted(self.ineqs.values(), key=lambda x: sorted(x.cells))
+    ineqs1 = sorted(ineqs_to_cross.values(), key=lambda x: x.num)
+    ineqs2 = sorted(self.ineqs.values(), key=lambda x: x.num)
 
     for ineq1 in ineqs1:
       print("ineq1:", ineq1)
       for ineq2 in ineqs2:
-        if sorted(ineq2.cells) < sorted(ineq1.cells):
+        if ineq2.cells < ineq1.cells:
           continue
 
         # print("ineq1, ineq2:", ineq1, ineq2)
@@ -481,10 +521,10 @@ class InequalityPoset(object):
   def find_trivial(self):
     trivial_ineqs = []
 
-    for ineq in sorted(self.ineqs.values(), key=lambda x: len(x.cells), reverse=True):
+    for ineq in sorted(self.ineqs.values(), key=lambda x: x.num, reverse=True):
       if ineq.trivial:
         for trivial in trivial_ineqs:
-          if ineq.cells.issubset(trivial.cells):
+          if ineq.issubset(trivial):
             break
         else:
           trivial_ineqs.append(ineq)
@@ -497,10 +537,10 @@ class InequalityPoset(object):
 
     for trivial in trivial_ineqs:
       if trivial.bounds[0] == 0:
-        revealed = revealed.union(trivial.cells)
+        revealed = revealed.union(trivial.cell_nums)
 
       elif trivial.bounds[0] > 0:
-        flagged = flagged.union(trivial.cells)
+        flagged = flagged.union(trivial.cell_nums)
 
     marked = revealed.union(flagged)
 
@@ -509,18 +549,18 @@ class InequalityPoset(object):
     print("marked:", marked)
     # before = len(self.ineqs)
 
-    for ineq in sorted(self.ineqs.values(), key=lambda x: len(x.cells), reverse=True):
+    for ineq in sorted(self.ineqs.values(), key=lambda x: x.num, reverse=True):
       # ipdb.set_trace()
-      if ineq.cells.issubset(marked):
+      if ineq.cell_nums.issubset(marked):
         # print("issubset")
         self.remove(ineq)
 
-      elif not marked.isdisjoint(ineq.cells):
+      elif not marked.isdisjoint(ineq.cell_nums):
         # print("not disjoint", ineq)
         self.remove(ineq)
-        num_flagged = len(flagged.intersection(ineq.cells))
+        num_flagged = len(flagged.intersection(ineq.cell_nums))
 
-        new_cells = ineq.cells.difference(marked)
+        new_cells = ineq.cell_nums.difference(marked)
         new_bounds = (
           min(max(ineq.bounds[0] - num_flagged, 0), len(new_cells)),
           min(ineq.bounds[1] - num_flagged, len(new_cells)),
@@ -549,14 +589,14 @@ class InequalityPoset(object):
     else:
       for root1 in self.roots.values():
         for root2 in self.roots.values():
-          if root1.cells != root2.cells and root1.cells.issuperset(root2.cells):
-            inconsistencies.append("{} should not be a root".format(sorted(root2.cells)))
+          if root1.cells != root2.cells and root1.issuperset(root2):
+            inconsistencies.append("{} should not be a root".format(root2.cell_nums))
 
-    ineqs = sorted(self.ineqs.values(), key=lambda x: len(x.cells))
+    ineqs = sorted(self.ineqs.values(), key=lambda x: x.num)
     for index1, ineq1 in enumerate(ineqs):
 
       if len(ineq1.children.keys()) == 0 and len(ineq1.parents.keys()) == 0 and len(self.ineqs.keys()) > 1:
-        inconsistencies.append("{} has no parents or children!".format(sorted(ineq1.cells)))
+        inconsistencies.append("{} has no parents or children!".format(ineq1.cell_nums))
 
       for index2, ineq2 in enumerate(ineqs):
         if index2 <= index1:
@@ -564,26 +604,26 @@ class InequalityPoset(object):
 
         if ineq2.cells in ineq1.parents.keys():
           if ineq1.cells not in ineq2.children.keys():
-            inconsistencies.append("{} should be a child of {}".format(sorted(ineq1.cells), sorted(ineq2.cells)))
+            inconsistencies.append("{} should be a child of {}".format(ineq1.cell_nums, ineq2.cell_nums))
 
         elif ineq2.cells in ineq1.children.keys():
           if ineq1.cells not in ineq2.parents.keys():
-            inconsistencies.append("{} should be a parent of {}".format(sorted(ineq1.cells), sorted(ineq2.cells)))
+            inconsistencies.append("{} should be a parent of {}".format(ineq1.cell_nums, ineq2.cell_nums))
 
-        if not ineq1.cells.issubset(ineq2.cells):
+        if not ineq1.issubset(ineq2):
           continue
 
         adjacent = True
 
         for ineq3 in ineqs[index1 + 1:index2]:
-          if ineq1.cells.issubset(ineq3.cells) and ineq3.cells.issubset(ineq2.cells):
+          if ineq1.issubset(ineq3) and ineq3.issubset(ineq2):
             adjacent = False
 
             if ineq1.cells in ineq2.children.keys() or ineq2.cells in ineq1.parents.keys():
-              inconsistencies.append("{} and {} are connected but {} is in between them".format(sorted(ineq1.cells), sorted(ineq2.cells), sorted(ineq3.cells)))
+              inconsistencies.append("{} and {} are connected but {} is in between them".format(ineq1.cell_nums, ineq2.cell_nums, ineq3.cell_nums))
 
         if adjacent and (ineq1.cells not in ineq2.children.keys() or ineq2.cells not in ineq1.parents.keys()):
-          inconsistencies.append("{} and {} should be connected but are not.".format(sorted(ineq1.cells), sorted(ineq2.cells)))
+          inconsistencies.append("{} and {} should be connected but are not.".format(ineq1.cell_nums, ineq2.cell_nums))
 
     if inconsistencies:
       any_match = False
@@ -705,13 +745,13 @@ class Puzzle(object):
       for trivial in trivial_ineqs:
         if trivial.bounds[0] == 0:
           # all cells revealed
-          revealed_cells = sorted(list(trivial.cells))
+          revealed_cells = trivial.cell_nums
           self.extend_unique(self.revealed, revealed_cells)
           self.extend_unique(self.changed, revealed_cells)
 
         elif trivial.bounds[0] > 0:
           # all cells flagged
-          flagged_cells = sorted(list(trivial.cells))
+          flagged_cells = trivial.cell_nums
           self.extend_unique(self.flagged, flagged_cells)
 
       print("\n trivial")
@@ -740,11 +780,11 @@ def output_debug_graph(ineq_map):
   file.write('digraph G {\nnode [shape=box];\n')
 
   def sort(L):
-    return sorted(L, key=lambda x: len(x.cells), reverse=True)
+    return sorted(L, key=lambda x: x.num, reverse=True)
 
   for ineq in sort(ineq_map.values()):
     for child in sort(ineq.children.values()):
-      file.write('"{}\n{}" -> "{}\n{}";\n'.format(sorted(ineq.cells), ineq.bounds, sorted(child.cells), child.bounds))
+      file.write('"{}\n{}" -> "{}\n{}";\n'.format(ineq.cell_nums, ineq.bounds, child.cell_nums, child.bounds))
 
   file.write('}\n')
   file.close()
@@ -777,7 +817,7 @@ def demo1():
 def demo2():
   # Combination Lock levels
 
-  level = 6
+  level = 2
 
   if level == 1:
     # Combination Lock I
