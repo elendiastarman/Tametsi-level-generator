@@ -413,6 +413,38 @@ class InequalityPoset(object):
     if before != after:
       self.fresh_ineqs = CellSetDict()
 
+  def cross_ancestors_and_descendants(self, add_inexact=True):
+    if self.fresh_ineqs:
+      ineqs_to_cross = self.fresh_ineqs
+    else:
+      print("Using 'em all.")
+      ineqs_to_cross = CellSetDict(ineq_map=self.ineqs)
+
+    before = len(self.ineqs)
+
+    ineqs_to_cross = sorted(ineqs_to_cross.values(), key=lambda x: sorted(x.cells))
+
+    for ineq1 in ineqs_to_cross:
+      print("ineq1:", ineq1)
+
+      candidates = self.roots.values()[:]
+
+      while candidates:
+        candidates.sort(key=lambda x: len(x.cells))
+        candidate = candidates.pop()
+
+        if not ineq1.cells.superset(candidate.cells) and not ineq1.cells.subset(candidate.cells):
+          continue
+
+        for new_ineq in ineq1.cross(candidate):
+          self.add(new_ineq, add_inexact)
+
+        candidates.extend(candidate.children.values())
+
+    after = len(self.ineqs)
+    if before != after:
+      self.fresh_ineqs = CellSetDict()
+
   def cross_all(self, add_inexact=True):
     if self.fresh_ineqs:
       ineqs_to_cross = self.fresh_ineqs
@@ -440,6 +472,11 @@ class InequalityPoset(object):
     after = len(self.ineqs)
     if before != after:
       self.fresh_ineqs = CellSetDict()
+
+  def purge(self, filter_func):
+    for ineq in self.ineqs.values():
+      if filter_func(ineq):
+        self.remove(ineq)
 
   def find_trivial(self):
     trivial_ineqs = []
@@ -638,14 +675,26 @@ class Puzzle(object):
       # IPython.embed()
       total_diff += abs(self.record_stage(self.ineq_poset.cross_immediate_relatives, add_inexact=False))
 
-      if total_diff == 0:
+      if total_diff > 0:
+        self.ineq_poset.purge(lambda x: not x.exact)
+      else:
         total_diff += abs(self.record_stage(self.ineq_poset.cross_immediate_relatives, add_inexact=True))
 
       if total_diff == 0:
         total_diff += abs(self.record_stage(self.ineq_poset.cross_all, add_inexact=False))
 
+        if total_diff > 0:
+          self.ineq_poset.purge(lambda x: not x.exact)
+        else:
+          total_diff += abs(self.record_stage(self.ineq_poset.cross_all, add_inexact=True))
+
       if total_diff == 0:
-        total_diff += abs(self.record_stage(self.ineq_poset.cross_all, add_inexact=True))
+        total_diff += abs(self.record_stage(self.ineq_poset.cross_ancestors_and_descendants, add_inexact=False))
+
+        if total_diff > 0:
+          self.ineq_poset.purge(lambda x: not x.exact)
+        else:
+          total_diff += abs(self.record_stage(self.ineq_poset.cross_ancestors_and_descendants, add_inexact=True))
       # print("\n cross_ineqs")
       # pprint.pprint([[ineq, ineq.parents.cell_set_map, ineq.children.cell_set_map] for ineq in self.ineq_poset.ineqs.values()], width=160)
       # ipdb.set_trace()
