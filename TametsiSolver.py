@@ -352,7 +352,8 @@ class Puzzle(object):
     self.ineq_set = InequalitySet()
     self.constraints = self.convert_constraints(constraints)
     self.flagged = []
-    self.changed = []
+    self.newly_revealed = []
+    self.newly_flagged = []
     self.rounds = []
 
   def convert_constraints(self, constraints):
@@ -368,7 +369,7 @@ class Puzzle(object):
         self.ineq_set.add(CellInequality(cells, (count, count)))
 
   def make_new_inequalities(self):
-    for c in self.changed:
+    for c in self.newly_revealed:
       if self.board[c][1] == '.':
         cells = []
         count = 0
@@ -383,7 +384,7 @@ class Puzzle(object):
         if cells:
           self.ineq_set.add(CellInequality(cells, (count, count)))
 
-    self.changed = []
+    self.newly_revealed = []
 
   def extend_unique(self, list1, list2):
     for x in list2:
@@ -405,7 +406,7 @@ class Puzzle(object):
     return diff
 
   def solve_puzzle(self):
-    self.changed = self.revealed[:]
+    self.newly_revealed = self.revealed[:]
     total_diff = 1
 
     while self.ineq_set.ineqs and total_diff > 0:
@@ -427,12 +428,15 @@ class Puzzle(object):
           # all cells revealed
           revealed_cells = trivial.cell_nums
           self.extend_unique(self.revealed, revealed_cells)
-          self.extend_unique(self.changed, revealed_cells)
+          self.extend_unique(self.newly_revealed, revealed_cells)
 
         elif trivial.bounds[0] > 0:
           # all cells flagged
           flagged_cells = trivial.cell_nums
           self.extend_unique(self.flagged, flagged_cells)
+          self.extend_unique(self.newly_flagged, flagged_cells)
+
+      self.rounds[-1]['trivial'] = [self.newly_revealed[:], self.newly_flagged[:], trivial_ineqs[:]]
 
       print("\n trivial")
       print(trivial_ineqs)
@@ -442,7 +446,8 @@ class Puzzle(object):
       print()
       print("Revealed:", self.revealed)
       print("Flagged:", self.flagged)
-      print("Changed:", self.changed)
+      print("Newly revealed:", self.newly_revealed)
+      print("Newly flagged:", self.newly_flagged)
       print()
 
     return (self.revealed, self.flagged, self.ineq_set.ineqs)
