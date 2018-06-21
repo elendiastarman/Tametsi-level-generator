@@ -28,8 +28,14 @@ import pprint
 # import ipdb
 
 
+def extend_unique(list1, list2):
+  for x in list2:
+    if x not in list1:
+      list1.append(x)
+
+
 class CellInequality(object):
-  def __init__(self, cells, bounds, parents=None, children=None):
+  def __init__(self, cells, bounds, parents=None):
     if hasattr(cells, '__iter__'):
       temp = 0
       for x in cells:
@@ -39,8 +45,7 @@ class CellInequality(object):
     self.cells = cells
     self.num = bin(cells).count('1')
     self.set_bounds(bounds)
-    self.parents = parents or CellSetDict()
-    self.children = children or CellSetDict()
+    self.set_parents(parents or [])
 
   def __repr__(self):
     return '({} with {})'.format(self.cell_nums, self.bounds)
@@ -52,6 +57,11 @@ class CellInequality(object):
       raise ValueError("Cannot have min greater than max (bounds = {}).".format(bounds))
 
     self.bounds = tuple(bounds)
+
+  def set_parents(self, parents):
+    self.parents = parents
+    self.pedigree = [1] + [parent[0] for parent in parents]
+    self.pedigree[0] = sum(self.pedigree)
 
   @property
   def trivial(self):
@@ -113,7 +123,7 @@ class CellInequality(object):
       min(shared_num, self.bounds[1], other.bounds[1]),
     )
 
-    new_ineqs = [CellInequality(shared_cells, shared_bounds)]
+    new_ineqs = [CellInequality(shared_cells, shared_bounds, [self, other])]
 
     left_cells = self.cells & ~shared_cells
     if left_cells:
@@ -121,7 +131,7 @@ class CellInequality(object):
         max(0, self.bounds[0] - shared_bounds[1]),
         min(self.num - shared_num, max(0, self.bounds[1] - shared_bounds[0])),
       )
-      new_ineqs.append(CellInequality(left_cells, left_bounds))
+      new_ineqs.append(CellInequality(left_cells, left_bounds, [self, other]))
 
     right_cells = other.cells & ~shared_cells
     if right_cells:
@@ -129,29 +139,9 @@ class CellInequality(object):
         max(0, other.bounds[0] - shared_bounds[1]),
         min(other.num - shared_num, max(0, other.bounds[1] - shared_bounds[0])),
       )
-      new_ineqs.append(CellInequality(right_cells, right_bounds))
+      new_ineqs.append(CellInequality(right_cells, right_bounds, [self, other]))
 
     return new_ineqs
-
-  def add_parent(self, other):
-    self.parents.add_ineq(other)
-
-  def remove_parent(self, other, strict=None):
-    self.parents.remove_ineq(other, strict=strict)
-
-  def replace_parent(self, old, new, strict=None):
-    self.remove_parent(old, strict=strict)
-    self.add_parent(new)
-
-  def add_child(self, other):
-    self.children.add_ineq(other)
-
-  def remove_child(self, other, strict=None):
-    self.children.remove_ineq(other, strict=strict)
-
-  def replace_child(self, old, new, strict=None):
-    self.remove_child(old, strict=strict)
-    self.add_child(new)
 
 
 class CellSetDict(object):
@@ -201,8 +191,12 @@ class CellSetDict(object):
         )
         old_ineq.set_bounds(new_bounds)
 
+        extend_unique(old_ineq.parents, ineq.parents)
+        old_ineq.set_parents(old_ineq.parents)
+
       else:
         old_ineq.set_bounds(ineq.bounds)
+        old_ineq.set_parents(ineq.parents)
 
     else:
       self.cell_set_map[ineq.cells] = ineq
@@ -342,7 +336,7 @@ class InequalitySet(object):
           min(ineq.bounds[1] - num_flagged, len(new_cells)),
         )
 
-        self.add(CellInequality(new_cells, new_bounds))
+        self.add(CellInequality(new_cells, new_bounds, [ineq]))
 
 
 class Puzzle(object):
@@ -386,11 +380,6 @@ class Puzzle(object):
 
     self.newly_revealed = []
 
-  def extend_unique(self, list1, list2):
-    for x in list2:
-      if x not in list1:
-        list1.append(x)
-
   def record_stage(self, func, *args, **kwargs):
     name = func.__name__
     before = len(self.ineq_set.ineqs)
@@ -427,14 +416,14 @@ class Puzzle(object):
         if trivial.bounds[0] == 0:
           # all cells revealed
           revealed_cells = trivial.cell_nums
-          self.extend_unique(self.revealed, revealed_cells)
-          self.extend_unique(self.newly_revealed, revealed_cells)
+          extend_unique(self.revealed, revealed_cells)
+          extend_unique(self.newly_revealed, revealed_cells)
 
         elif trivial.bounds[0] > 0:
           # all cells flagged
           flagged_cells = trivial.cell_nums
-          self.extend_unique(self.flagged, flagged_cells)
-          self.extend_unique(self.newly_flagged, flagged_cells)
+          extend_unique(self.flagged, flagged_cells)
+          extend_unique(self.newly_flagged, flagged_cells)
 
       self.rounds[-1]['trivial'] = [self.newly_revealed[:], self.newly_flagged[:], trivial_ineqs[:]]
 
