@@ -44,11 +44,15 @@ class CellInequality(object):
 
     self.cells = cells
     self.num = bin(cells).count('1')
+    self.bounds = tuple()
+    self.parents = None
+    self.pedigree = [0]
+
     self.set_bounds(bounds)
-    self.set_parents(parents or [])
+    self.set_parents(parents)
 
   def __repr__(self):
-    return '({} with {})'.format(self.cell_nums, self.bounds)
+    return '({} with {}; pedigree: {})'.format(self.cell_nums, self.bounds, self.pedigree)
 
   def set_bounds(self, bounds):
     if bounds[0] < 0 or bounds[1] < 0:
@@ -59,9 +63,13 @@ class CellInequality(object):
     self.bounds = tuple(bounds)
 
   def set_parents(self, parents):
-    self.parents = parents
-    self.pedigree = [1] + [parent[0] for parent in parents]
-    self.pedigree[0] = sum(self.pedigree)
+    print("  before:", self)
+    print("  parents:", parents)
+    if parents:
+      self.parents = parents
+      self.pedigree = [0] + [parent.pedigree[0] for parent in parents]
+      self.pedigree[0] = max(self.pedigree) + 1
+    print("  after:", self)
 
   @property
   def trivial(self):
