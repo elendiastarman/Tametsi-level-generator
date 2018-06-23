@@ -1,3 +1,5 @@
+import sys
+
 from TametsiSolver import Puzzle, uncompress
 
 
@@ -17,16 +19,28 @@ def score_puzzle(puzzle):
   return difficulty
 
 
-if __name__ == '__main__':
-  # width, height = 6, 6
-  width, height = 10, 10
-  # compressed = '.*.?...*.?..*.***?**.?..*?*.*....*.?'
-  # compressed = '.***.*..*****.*..*.?.....*..*?.*.***'
-  compressed = '**?....**.*...*.*......*......*.*.?**.*.**?.*??....**.?*.??.....*.***...........*?**.*...**.*?..**?.'
+def CL_demo(num):
+  if num == 1:
+    width, height = 6, 6
+    compressed = '.*.?...*.?..*.***?**.?..*?*.*....*.?'
+
+  elif num == 2:
+    width, height = 6, 6
+    compressed = '.***.*..*****.*..*.?.....*..*?.*.***'
+
+  elif num == 6:
+    width, height = 10, 10
+    compressed = '**?....**.*...*.*......*......*.*.?**.*.**?.*??....**.?*.??.....*.***...........*?**.*...**.*?..**?.'
+
   board, revealed, constraints = uncompress(width, height, compressed)
 
   puzzle = Puzzle(board, revealed, constraints)
-  puzzle.solve()
+  solved = puzzle.solve()
+  print("Solved?", solved)
 
   score = score_puzzle(puzzle)
   print("Score:", score)
+
+
+if __name__ == '__main__':
+  CL_demo(int(sys.argv[1]) if len(sys.argv) > 1 else 1)
