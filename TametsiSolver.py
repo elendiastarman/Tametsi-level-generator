@@ -35,7 +35,7 @@ def extend_unique(list1, list2):
 
 
 class CellInequality(object):
-  def __init__(self, cells, bounds, parents=None):
+  def __init__(self, cells, bounds, parents=None, round_num=0):
     if hasattr(cells, '__iter__'):
       temp = 0
       for x in cells:
@@ -46,7 +46,7 @@ class CellInequality(object):
     self.num = bin(cells).count('1')
     self.bounds = tuple()
     self.parents = None
-    self.pedigree = [0]
+    self.pedigree = [round_num]
 
     self.set_bounds(bounds)
     self.set_parents(parents)
@@ -189,7 +189,11 @@ class CellSetDict(object):
     if ineq.cells in self.cell_set_map:
       old_ineq = self.cell_set_map[ineq.cells]
 
-      if not override:
+      if override:
+        old_ineq.set_bounds(ineq.bounds)
+        old_ineq.set_parents(ineq.parents)
+
+      else:
         if old_ineq.bounds == ineq.bounds:
           return
 
@@ -197,14 +201,14 @@ class CellSetDict(object):
           max(old_ineq.bounds[0], ineq.bounds[0]),
           min(old_ineq.bounds[1], ineq.bounds[1]),
         )
+
+        if new_bounds == old_ineq.bounds:
+          return
+
         old_ineq.set_bounds(new_bounds)
 
         extend_unique(old_ineq.parents, ineq.parents)
         old_ineq.set_parents(old_ineq.parents)
-
-      else:
-        old_ineq.set_bounds(ineq.bounds)
-        old_ineq.set_parents(ineq.parents)
 
     else:
       self.cell_set_map[ineq.cells] = ineq
@@ -283,7 +287,6 @@ class InequalitySet(object):
     ineqs2 = sorted(self.ineqs.values(), key=lambda x: x.num)
 
     for ineq1 in ineqs1:
-      # print("ineq1:", ineq1)
       for ineq2 in ineqs2:
         if ineq2.cells < ineq1.cells:
           continue
@@ -328,13 +331,10 @@ class InequalitySet(object):
     print("marked:", marked)
 
     for ineq in sorted(self.ineqs.values(), key=lambda x: x.num, reverse=True):
-      # ipdb.set_trace()
       if ineq.cell_nums.issubset(marked):
-        # print("issubset")
         self.remove(ineq)
 
       elif not marked.isdisjoint(ineq.cell_nums):
-        # print("not disjoint", ineq)
         self.remove(ineq)
         num_flagged = len(flagged.intersection(ineq.cell_nums))
 
@@ -384,7 +384,7 @@ class Puzzle(object):
               count += 1
 
         if cells:
-          self.ineq_set.add(CellInequality(cells, (count, count)))
+          self.ineq_set.add(CellInequality(cells, (count, count), round_num=len(self.rounds) - 1))
 
     self.newly_revealed = []
 
