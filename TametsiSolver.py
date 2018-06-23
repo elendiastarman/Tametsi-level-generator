@@ -195,7 +195,7 @@ class CellSetDict(object):
 
       else:
         if old_ineq.bounds == ineq.bounds:
-          return
+          return 0
 
         new_bounds = (
           max(old_ineq.bounds[0], ineq.bounds[0]),
@@ -203,12 +203,12 @@ class CellSetDict(object):
         )
 
         if new_bounds == old_ineq.bounds:
-          return
+          return 0
 
         old_ineq.set_bounds(new_bounds)
 
         if ineq.parents:
-          new_parents = old_ineq.parents[:]
+          new_parents = old_ineq.parents[:] if old_ineq.parents else []
           extend_unique(new_parents, ineq.parents)
 
           if new_parents != old_ineq.parents:
@@ -216,6 +216,8 @@ class CellSetDict(object):
 
     else:
       self.cell_set_map[ineq.cells] = ineq
+
+    return 1
 
   def get_ineq(self, ineq_cells, strict=None):
     is_strict = strict is True or strict is None and self.strict is True
@@ -264,11 +266,12 @@ class InequalitySet(object):
     self.ineqs = CellSetDict()
     self.roots = CellSetDict()
     self.fresh_ineqs = CellSetDict()
+    self.num_added = 0
 
   def add(self, ineq, add_inexact=True):
     if add_inexact or ineq.exact:
-      self.ineqs.add_ineq(ineq)
       self.fresh_ineqs.add_ineq(ineq)
+      self.num_added += self.ineqs.add_ineq(ineq)
 
   def get(self, cells):
     return self.ineqs.get(cells, None)
@@ -412,7 +415,7 @@ class Puzzle(object):
     self.newly_revealed = self.revealed[:]
     total_diff = 1
 
-    while self.ineq_set.ineqs and total_diff > 0:
+    while self.ineq_set.ineqs and (total_diff > 0 or self.ineq_set.num_added > 0):
       self.rounds.append({})
       total_diff = 0
 
