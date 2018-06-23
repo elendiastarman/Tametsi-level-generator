@@ -270,8 +270,11 @@ class InequalitySet(object):
 
   def add(self, ineq, add_inexact=True):
     if add_inexact or ineq.exact:
-      self.fresh_ineqs.add_ineq(ineq)
-      self.num_added += self.ineqs.add_ineq(ineq)
+      added = self.ineqs.add_ineq(ineq)
+      self.num_added += added
+
+      if added:
+        self.fresh_ineqs.add_ineq(ineq)
 
   def get(self, cells):
     return self.ineqs.get(cells, None)
@@ -282,6 +285,7 @@ class InequalitySet(object):
 
   def cross_all(self, add_inexact=True):
     if self.fresh_ineqs:
+      print("num fresh_ineqs:", len(self.fresh_ineqs.keys()))
       ineqs_to_cross = self.fresh_ineqs
     else:
       print("Using 'em all.")
@@ -418,6 +422,8 @@ class Puzzle(object):
     while self.ineq_set.ineqs and (total_diff > 0 or self.ineq_set.num_added > 0):
       self.rounds.append({})
       total_diff = 0
+      self.ineq_set.num_added = 0
+      self.ineq_set.fresh_ineqs = CellSetDict()
 
       total_diff += abs(self.record_stage(self.make_new_inequalities))
       total_diff += abs(self.record_stage(self.ineq_set.cross_all, add_inexact=False))
