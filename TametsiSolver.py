@@ -63,13 +63,10 @@ class CellInequality(object):
     self.bounds = tuple(bounds)
 
   def set_parents(self, parents):
-    # print("  before:", self)
-    # print("  parents:", parents)
     if parents:
       self.parents = parents
       self.pedigree = [0] + [parent.pedigree[0] for parent in parents]
       self.pedigree[0] = max(self.pedigree) + 1
-    # print("  after:", self)
 
   @property
   def trivial(self):
@@ -262,7 +259,9 @@ class CellSetDict(object):
 
 
 class InequalitySet(object):
-  def __init__(self):
+  def __init__(self, verbose=False):
+    self.verbose = verbose
+
     self.ineqs = CellSetDict()
     self.roots = CellSetDict()
     self.fresh_ineqs = CellSetDict()
@@ -285,10 +284,12 @@ class InequalitySet(object):
 
   def cross_all(self, add_inexact=True):
     if self.fresh_ineqs:
-      print("num fresh_ineqs:", len(self.fresh_ineqs.keys()))
+      if self.verbose:
+        print("num fresh_ineqs:", len(self.fresh_ineqs.keys()))
       ineqs_to_cross = self.fresh_ineqs
     else:
-      print("Using 'em all.")
+      if self.verbose:
+        print("Using 'em all.")
       ineqs_to_cross = CellSetDict(ineq_map=self.ineqs)
 
     before = len(self.ineqs)
@@ -341,7 +342,8 @@ class InequalitySet(object):
         flagged = flagged.union(trivial.cell_nums)
 
     marked = revealed.union(flagged)
-    print("marked:", marked)
+    if self.verbose:
+      print("marked:", marked)
 
     for ineq in sorted(self.ineqs.values(), key=lambda x: x.num, reverse=True):
       if ineq.cell_nums.issubset(marked):
@@ -361,11 +363,13 @@ class InequalitySet(object):
 
 
 class Puzzle(object):
-  def __init__(self, board, revealed, constraints):
+  def __init__(self, board, revealed, constraints, verbose=False):
     self.board = board
     self.revealed = revealed
-    self.ineq_set = InequalitySet()
+    self.ineq_set = InequalitySet(verbose=verbose)
     self.constraints = self.convert_constraints(constraints)
+    self.verbose = verbose
+
     self.flagged = []
     self.newly_revealed = []
     self.newly_flagged = []
@@ -404,18 +408,20 @@ class Puzzle(object):
   def record_stage(self, func, *args, **kwargs):
     name = func.__name__
     before = len(self.ineq_set.ineqs)
-    print("before {} (with args {} and kwargs {}): {}".format(name, args, kwargs, before))
+    if self.verbose:
+      print("before {} (with args {} and kwargs {}): {}".format(name, args, kwargs, before))
 
     func(*args, **kwargs)
 
     after = len(self.ineq_set.ineqs)
-    print("after {} (with args {} and kwargs {}): {}".format(name, args, kwargs, after))
+    if self.verbose:
+      print("after {} (with args {} and kwargs {}): {}".format(name, args, kwargs, after))
     diff = after - before
     self.rounds[-1][name] = [before, after, diff]
 
     return diff
 
-  def solve_puzzle(self):
+  def solve(self):
     self.newly_revealed = self.revealed[:]
     total_diff = 1
 
@@ -450,17 +456,19 @@ class Puzzle(object):
 
       self.rounds[-1]['trivial'] = [self.newly_revealed[:], self.newly_flagged[:], trivial_ineqs[:]]
 
-      print("\n trivial")
-      print(trivial_ineqs)
+      if self.verbose:
+        print("\n trivial")
+        print(trivial_ineqs)
 
       total_diff += abs(self.record_stage(self.ineq_set.reduce, trivial_ineqs))
 
-      print()
-      print("Revealed:", self.revealed)
-      print("Flagged:", self.flagged)
-      print("Newly revealed:", self.newly_revealed)
-      print("Newly flagged:", self.newly_flagged)
-      print()
+      if self.verbose:
+        print()
+        print("Revealed:", self.revealed)
+        print("Flagged:", self.flagged)
+        print("Newly revealed:", self.newly_revealed)
+        print("Newly flagged:", self.newly_flagged)
+        print()
 
     return (self.revealed, self.flagged, self.ineq_set.ineqs)
 
@@ -486,7 +494,48 @@ def demo1():
   print('board:', board)
   print('constraints:', constraints)
 
-  print(Puzzle(board, revealed, constraints).solve_puzzle())
+  print(Puzzle(board, revealed, constraints, verbose=True).solve())
+
+
+def uncompress(width, height, compressed):
+  board = []
+
+  for i in range(width * height):
+    neighbors = []
+    board.append((i, compressed[i], neighbors))
+
+    for dx in [-1, 0, 1]:
+      if i % width + dx < 0 or i % width + dx >= width:
+        continue
+
+      for dy in [-1, 0, 1]:
+        if i // width + dy < 0 or i // width + dy >= height:
+          continue
+
+        if [dx, dy] == [0, 0]:
+          continue
+
+        neighbors.append(i + dx + width * dy)
+
+  constraints = [(compressed.count('*'), list(range(width * height)))]
+
+  # vertical column hints
+  for j in range(width):
+    constraints.append((
+      compressed[j::width].count('*'),
+      [j + k * width for k in range(height)],
+    ))
+
+  # horizontal column hints
+  for j in range(height):
+    constraints.append((
+      compressed[j * width:j * width + width].count('*'),
+      list(range(j * width, j * width + width)),
+    ))
+
+  revealed = []
+
+  return board, revealed, constraints
 
 
 def demo2():
@@ -531,48 +580,13 @@ def demo2():
     compressed = '**?....**.*...*.*......*......*.*.?**.*.**?.*??....**.?*.??.....*.***...........*?**.*...**.*?..**?.'
     w, h = 10, 10
 
-  board = []
-
-  for i in range(w * h):
-    neighbors = []
-    board.append((i, compressed[i], neighbors))
-
-    for dx in [-1, 0, 1]:
-      if i % w + dx < 0 or i % w + dx >= w:
-        continue
-
-      for dy in [-1, 0, 1]:
-        if i // w + dy < 0 or i // w + dy >= h:
-          continue
-
-        if [dx, dy] == [0, 0]:
-          continue
-
-        neighbors.append(i + dx + w * dy)
-
-  constraints = [(compressed.count('*'), list(range(w * h)))]
-
-  # vertical column hints
-  for j in range(w):
-    constraints.append((
-      compressed[j::w].count('*'),
-      [j + k * w for k in range(h)],
-    ))
-
-  # horizontal column hints
-  for j in range(h):
-    constraints.append((
-      compressed[j * w:j * w + w].count('*'),
-      list(range(j * w, j * w + w)),
-    ))
-
-  revealed = []
+  board, revealed, constraints = uncompress(w, h, compressed)
 
   print('board:', board)
   print('constraints:')
   pprint.pprint(constraints, width=160)
 
-  print(Puzzle(board, revealed, constraints).solve_puzzle())
+  print(Puzzle(board, revealed, constraints, verbose=True).solve())
 
 
 def demo3():
@@ -608,7 +622,7 @@ def demo3():
   print('board:', board)
   print('constraints:', constraints)
 
-  print(Puzzle(board, revealed, constraints).solve_puzzle())
+  print(Puzzle(board, revealed, constraints, verbose=True).solve())
 
 
 if __name__ == "__main__":
