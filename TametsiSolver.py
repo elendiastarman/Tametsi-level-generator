@@ -470,7 +470,7 @@ class Puzzle(object):
         print("Newly flagged:", self.newly_flagged)
         print()
 
-    return (self.revealed, self.flagged, self.ineq_set.ineqs)
+    return bool(self.ineq_set.keys())
 
 
 def demo1():
