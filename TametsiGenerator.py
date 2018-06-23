@@ -4,19 +4,20 @@ from TametsiSolver import Puzzle, uncompress
 
 
 def score_puzzle(puzzle):
-  difficulty = 0
-  difficulty_step = 1
-  multiplier = 100
+  difficulty_steps = [0]
+  step = 0
 
   for round in puzzle.rounds:
     if len(round['trivial'][-1]):
-      difficulty += difficulty_step
-      difficulty_step = 1
+      difficulty_steps[step] += 1
+      step = 0
 
     else:
-      difficulty_step *= multiplier
+      step += 1
+      if step >= len(difficulty_steps):
+        difficulty_steps.append(0)
 
-  return difficulty
+  return difficulty_steps
 
 
 def CL_demo(num):
