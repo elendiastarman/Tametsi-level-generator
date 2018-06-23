@@ -63,13 +63,13 @@ class CellInequality(object):
     self.bounds = tuple(bounds)
 
   def set_parents(self, parents):
-    print("  before:", self)
-    print("  parents:", parents)
+    # print("  before:", self)
+    # print("  parents:", parents)
     if parents:
       self.parents = parents
       self.pedigree = [0] + [parent.pedigree[0] for parent in parents]
       self.pedigree[0] = max(self.pedigree) + 1
-    print("  after:", self)
+    # print("  after:", self)
 
   @property
   def trivial(self):
@@ -207,8 +207,12 @@ class CellSetDict(object):
 
         old_ineq.set_bounds(new_bounds)
 
-        extend_unique(old_ineq.parents, ineq.parents)
-        old_ineq.set_parents(old_ineq.parents)
+        if ineq.parents:
+          new_parents = old_ineq.parents[:]
+          extend_unique(new_parents, ineq.parents)
+
+          if new_parents != old_ineq.parents:
+            old_ineq.set_parents(new_parents)
 
     else:
       self.cell_set_map[ineq.cells] = ineq
@@ -263,9 +267,8 @@ class InequalitySet(object):
 
   def add(self, ineq, add_inexact=True):
     if add_inexact or ineq.exact:
-      if not self.ineqs.has_ineq(ineq):
-        self.ineqs.add_ineq(ineq)
-        self.fresh_ineqs.add_ineq(ineq)
+      self.ineqs.add_ineq(ineq)
+      self.fresh_ineqs.add_ineq(ineq)
 
   def get(self, cells):
     return self.ineqs.get(cells, None)
@@ -480,7 +483,7 @@ def demo1():
 def demo2():
   # Combination Lock levels
 
-  level = 1
+  level = 6
 
   if level == 1:
     # Combination Lock I
