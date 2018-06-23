@@ -319,8 +319,11 @@ class InequalitySet(object):
   def reduce(self, trivial_ineqs):
     revealed = set()
     flagged = set()
+    round_num = 0
 
     for trivial in trivial_ineqs:
+      round_num = max(round_num, trivial.pedigree[0])
+
       if trivial.bounds[0] == 0:
         revealed = revealed.union(trivial.cell_nums)
 
@@ -344,7 +347,7 @@ class InequalitySet(object):
           min(ineq.bounds[1] - num_flagged, len(new_cells)),
         )
 
-        self.add(CellInequality(new_cells, new_bounds, [ineq]))
+        self.add(CellInequality(new_cells, new_bounds, round_num=round_num))
 
 
 class Puzzle(object):
@@ -477,7 +480,7 @@ def demo1():
 def demo2():
   # Combination Lock levels
 
-  level = 6
+  level = 1
 
   if level == 1:
     # Combination Lock I
