@@ -1,0 +1,44 @@
+<PUZZLE>
+  <ID>YTest{{ puzzle_id }}</ID>
+  <META>
+    <TILE_TEXT>EXP</TILE_TEXT>
+    <NEXT_PUZZLE_ID/>
+    <UNLOCKED_BY_AMOUNT>false</UNLOCKED_BY_AMOUNT>
+    <REQUIRE_ALL_UNLOCK_PUZZLES>true</REQUIRE_ALL_UNLOCK_PUZZLES>
+    <REQUIRE_PERFECT>false</REQUIRE_PERFECT>
+    <UNLOCK_PUZZLES>10</UNLOCK_PUZZLES>
+    <UNLOCK_AMOUNT>0</UNLOCK_AMOUNT>
+  </META>
+  <TITLE>{{ title }}</TITLE>
+  <GRAPH>
+    {% for node in nodes %}
+    <NODE>
+      <ID>{{ node.id }}</ID>
+      <EDGES>{{ node.neighbors|join(',') }}</EDGES>
+      <POS>{{ node.position|join(',') }}</POS>
+      <POLY>
+        <POINTS>{{ node.points }}</POINTS>
+        <HIGHLIGHTS>0,1,2</HIGHLIGHTS>
+        <HIGHLIGHTS_TAPER_START>true</HIGHLIGHTS_TAPER_START>
+        <HIGHLIGHTS_TAPER_END>true</HIGHLIGHTS_TAPER_END>
+      </POLY>
+      <HAS_MINE>{{ node.has_mine }}</HAS_MINE>
+      <SECRET>{{ node.secret }}</SECRET>
+    </NODE>
+    {% endfor %}
+  </GRAPH>
+  <HINT_LIST/>
+  <COLUMN_HINT_LIST>
+    {% for column in columns %}
+    <COLUMN_HINT>
+      <IDS>{{ column.ids|join(',') }}</IDS>
+      <TEXT_LOCATION>{{ column.text_location|join(',') }}</TEXT_LOCATION>
+      <TEXT_ROTATION>0.0</TEXT_ROTATION>
+      <TEXT_SIZE_FACTOR>1.0</TEXT_SIZE_FACTOR>
+    </COLUMN_HINT>
+    {% endfor %}
+  </COLUMN_HINT_LIST>
+  <TEXT/>
+  <TEXT_POS>0.0,0.0</TEXT_POS>
+  <CORNER_FLAG>true</CORNER_FLAG>
+</PUZZLE>
