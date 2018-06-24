@@ -6,17 +6,15 @@ from TametsiSolver import Puzzle, uncompress
 
 def extract_difficulty_steps(puzzle):
   difficulty_steps = [0]
-  step = 0
 
   for round in puzzle.rounds:
-    if len(round['trivial'][-1]):
-      difficulty_steps[step] += 1
-      step = 0
+    difficulty_steps[-1] += 1
 
-    else:
-      step += 1
-      if step >= len(difficulty_steps):
-        difficulty_steps.append(0)
+    if len(round['trivial'][-1]):
+      difficulty_steps.append(0)
+
+  if difficulty_steps[-1] == 0:
+    difficulty_steps.pop()
 
   return difficulty_steps
 
@@ -47,29 +45,28 @@ def CL_demo(num):
 def get_difficulty_steps(width, height, compressed):
   board, revealed, constraints = uncompress(width, height, compressed)
   puzzle = Puzzle(board, revealed, constraints)
-  puzzle.solve()
+  solved = puzzle.solve()
 
-  return extract_difficulty_steps(puzzle)
+  return solved, extract_difficulty_steps(puzzle)
 
 
 def raw_difficulty(width, height, compressed, multiplier=100):
-  difficulty_steps = get_difficulty_steps(width, height, compressed)
+  solved, difficulty_steps = get_difficulty_steps(width, height, compressed)
 
-  if difficulty_steps[-1] > 0:
-    return sum([multiplier ** x * y for x, y in enumerate(difficulty_steps)])
+  if not solved:
+    return -1
 
-  else:
-    return 0
+  return sum([multiplier ** x for x in difficulty_steps])
 
 
 def smooth_difficulty(width, height, compressed):
-  difficulty_steps = get_difficulty_steps(width, height, compressed)
+  solved, difficulty_steps = get_difficulty_steps(width, height, compressed)
 
-  if difficulty_steps[-1] == 0:
-    return 0
+  if not solved:
+    return -1
 
-  if len(difficulty_steps) < 2:
-    return difficulty_steps[0] ** 0.5
+  if len(difficulty_steps) < 2 or 0 in difficulty_steps:
+    return -1
 
   score = 0
 
@@ -77,7 +74,7 @@ def smooth_difficulty(width, height, compressed):
     a, b = difficulty_steps[index:index + 2]
     x, y = min(a, b), max(a, b)
 
-    score += x + x / (y - x + 1)
+    score += x * (y - 1) / (y - x + 1)
 
   return score
 
@@ -108,30 +105,33 @@ def evolutionary_demo(width, height, seeds=10):
   round_num = 0
   while 1:
     round_num += 1
-    added = False
+    added_to_best = False
 
-    for index, bstr1 in enumerate(best):
-      for bstr2 in best[index:]:
-        x = random.randint(1, width * height - 1)
-        nstr = bstr1[:x] + bstr2[x:]
+    while not added_to_best:
+      bstr1 = random.choice(best)
+      bstr2 = random.choice(best)
+      if bstr1 == bstr2:
+        continue
 
-        # mutate
-        for i in range(len(nstr)):
-          if random.random() < 1 / 2:
-            nstr = nstr[:i] + random.choice(choices) + nstr[i + 1:]
+      x = random.randint(1, width * height - 1)
+      nstr = bstr1[:x] + bstr2[x:]
 
-        if nstr not in board_strings:
-          board_strings[nstr] = metric(width, height, nstr)
-          added = True
+      # mutate
+      for i in range(len(nstr)):
+        if random.random() < 1 / 2:
+          nstr = nstr[:i] + random.choice(choices) + nstr[i + 1:]
 
-    if not added:
-      continue
+      if nstr not in board_strings:
+        board_strings[nstr] = metric(width, height, nstr)
+
+        if board_strings[nstr] > board_strings[best[0]]:
+          added_to_best = True
 
     best = sorted(board_strings.keys(), key=lambda x: board_strings[x])[-seeds:]
 
     print("Best of round {}:".format(round_num))
     for bstr in best:
-      print("String {} had score {}.".format(bstr, board_strings[bstr]))
+      print("String {} had score {} (steps: {}).".format(bstr, board_strings[bstr], get_difficulty_steps(width, height, bstr)))
 
 
 if __name__ == '__main__':
