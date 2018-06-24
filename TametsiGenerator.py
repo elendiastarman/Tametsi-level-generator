@@ -96,7 +96,7 @@ def random_demo(width, height):
 
 def evolutionary_demo(width, height, seeds=10):
   board_strings = {}
-  choices = '..*'
+  choices = '....**?'
   metric = smooth_difficulty
 
   for _ in range(seeds):
