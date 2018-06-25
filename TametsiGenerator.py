@@ -134,7 +134,45 @@ def evolutionary_demo(width, height, seeds=10):
       print("String {} had score {} (steps: {}).".format(bstr, board_strings[bstr], get_difficulty_steps(width, height, bstr)))
 
 
+def iteration_demo(width, height):
+  choices = '....**?'
+  metric = smooth_difficulty
+  max_score = 0
+  round_num = 0
+
+  while 1:
+    round_num += 1
+    base = ''.join([random.choice(choices) for x in range(width * height)])
+    temp_max = metric(width, height, base)
+    temp_best = base
+
+    while 1:
+      variants = set()
+
+      for i in range(len(base)):
+        for c in choices:
+          if base[i] == c:
+            continue
+          variants.add(base[:i] + c + base[i + 1:])
+
+      scores = {v: metric(width, height, v) for v in variants}
+      best = sorted(scores.items(), key=lambda x: x[1])[-1]
+
+      if best[1] > temp_max:
+        base = best[0]
+        temp_max = best[1]
+        temp_best = base
+
+      else:
+        break
+
+    if temp_max > max_score:
+      max_score = temp_max
+      print("Best so far in round {}: {} with score {}".format(round_num, temp_best, temp_max))
+
+
 if __name__ == '__main__':
   # CL_demo(int(sys.argv[1]) if len(sys.argv) > 1 else 1)
   # random_demo(6, 6)
-  evolutionary_demo(6, 6, int(sys.argv[1]) if len(sys.argv) > 1 else 10)
+  # evolutionary_demo(6, 6, int(sys.argv[1]) if len(sys.argv) > 1 else 10)
+  iteration_demo(6, 6)
