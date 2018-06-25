@@ -166,9 +166,10 @@ def iteration_demo(width, height):
       else:
         break
 
+    print("Best of round {}: {} with score {} and steps {}".format(round_num, temp_best, temp_max, get_difficulty_steps(width, height, temp_best)))
     if temp_max > max_score:
       max_score = temp_max
-      print("Best so far in round {}: {} with score {}".format(round_num, temp_best, temp_max))
+      print(" ^ Best so far!")
 
 
 if __name__ == '__main__':
