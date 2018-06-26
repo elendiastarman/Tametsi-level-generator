@@ -60,6 +60,9 @@ def raw_difficulty(width, height, compressed, multiplier=100):
 
 
 def smooth_difficulty(width, height, compressed):
+  if not sanity_check(width, height, compressed):
+    return -1
+
   solved, difficulty_steps = get_difficulty_steps(width, height, compressed)
 
   if not solved:
@@ -77,6 +80,18 @@ def smooth_difficulty(width, height, compressed):
     score += x * (y - 1) / (y - x + 1)
 
   return score
+
+
+def sanity_check(width, height, compressed):
+  for w in range(width):
+    if compressed[w::width].count('.') != height:
+      return False
+
+  for h in range(height):
+    if compressed[h:h + width].count('.') != width:
+      return False
+
+  return True
 
 
 def random_demo(width, height):
@@ -146,17 +161,27 @@ def iteration_demo(width, height):
     temp_max = metric(width, height, base)
     temp_best = base
 
+    iteration = 0
+    print("Round {}: ".format(round_num), end='', flush=True)
+
     while 1:
-      variants = set()
+      print(iteration % 10, end='', flush=True)
+      iteration += 1
+
+      variants = {}
 
       for i in range(len(base)):
         for c in choices:
           if base[i] == c:
             continue
-          variants.add(base[:i] + c + base[i + 1:])
 
-      scores = {v: metric(width, height, v) for v in variants}
-      best = sorted(scores.items(), key=lambda x: x[1])[-1]
+          v = base[:i] + c + base[i + 1:]
+
+          if v not in variants:
+            variants[v] = metric(width, height, v)
+            print('.', end='', flush=True)
+
+      best = sorted(variants.items(), key=lambda x: x[1])[-1]
 
       if best[1] > temp_max:
         base = best[0]
@@ -164,6 +189,7 @@ def iteration_demo(width, height):
         temp_best = base
 
       else:
+        print()
         break
 
     print("Best of round {}: {} with score {} and steps {}".format(round_num, temp_best, temp_max, get_difficulty_steps(width, height, temp_best)))
@@ -176,4 +202,9 @@ if __name__ == '__main__':
   # CL_demo(int(sys.argv[1]) if len(sys.argv) > 1 else 1)
   # random_demo(6, 6)
   # evolutionary_demo(6, 6, int(sys.argv[1]) if len(sys.argv) > 1 else 10)
-  iteration_demo(6, 6)
+  if len(sys.argv) > 2:
+    w, h = map(int, sys.argv[1:3])
+  else:
+    w, h = 6, 6
+  # iteration_demo(w, h)
+  evolutionary_demo(w, h, int(sys.argv[3]) if len(sys.argv) > 3 else 10)
