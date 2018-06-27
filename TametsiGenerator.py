@@ -4,6 +4,9 @@ import random
 from TametsiSolver import Puzzle, uncompress
 
 
+difficulty_step_cache = {}
+
+
 def extract_difficulty_steps(puzzle):
   difficulty_steps = [0]
 
@@ -43,11 +46,15 @@ def CL_demo(num):
 
 
 def get_difficulty_steps(width, height, compressed):
-  board, revealed, constraints = uncompress(width, height, compressed)
-  puzzle = Puzzle(board, revealed, constraints)
-  solved = puzzle.solve()
+  key = (width, height, compressed)
 
-  return solved, extract_difficulty_steps(puzzle)
+  if key not in difficulty_step_cache:
+    board, revealed, constraints = uncompress(width, height, compressed)
+    puzzle = Puzzle(board, revealed, constraints)
+    solved = puzzle.solve()
+    difficulty_step_cache[key] = solved, extract_difficulty_steps(puzzle)
+
+  return difficulty_step_cache[key]
 
 
 def raw_difficulty(width, height, compressed, multiplier=100):
@@ -84,14 +91,14 @@ def smooth_difficulty(width, height, compressed):
 
 def sanity_check(width, height, compressed):
   for w in range(width):
-    if compressed[w::width].count('.') != height:
-      return False
+    if compressed[w::width].count('*') == 0:
+      return True
 
   for h in range(height):
-    if compressed[h:h + width].count('.') != width:
-      return False
+    if compressed[h * width:h * width + width].count('*') == 0:
+      return True
 
-  return True
+  return False
 
 
 def random_demo(width, height):
@@ -115,7 +122,7 @@ def evolutionary_demo(width, height, seeds=10):
     compressed = ''.join([random.choice(choices) for x in range(width * height)])
     board_strings[compressed] = metric(width, height, compressed)
 
-  best = list(board_strings.keys())[:]
+  best = sorted(board_strings.keys(), key=lambda x: board_strings[x])
 
   round_num = 0
   while 1:
@@ -146,7 +153,9 @@ def evolutionary_demo(width, height, seeds=10):
 
     print("Best of round {}:".format(round_num))
     for bstr in best:
-      print("String {} had score {} (steps: {}).".format(bstr, board_strings[bstr], get_difficulty_steps(width, height, bstr)))
+      score = board_strings[bstr]
+      steps = get_difficulty_steps(width, height, bstr) if score > -1 else []
+      print("String {} had score {} (steps: {}).".format(bstr, score, steps))
 
 
 def iteration_demo(width, height):
@@ -206,5 +215,5 @@ if __name__ == '__main__':
     w, h = map(int, sys.argv[1:3])
   else:
     w, h = 6, 6
-  # iteration_demo(w, h)
-  evolutionary_demo(w, h, int(sys.argv[3]) if len(sys.argv) > 3 else 10)
+  iteration_demo(w, h)
+  # evolutionary_demo(w, h, int(sys.argv[3]) if len(sys.argv) > 3 else 10)
