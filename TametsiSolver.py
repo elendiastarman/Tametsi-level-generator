@@ -363,12 +363,13 @@ class InequalitySet(object):
 
 
 class Puzzle(object):
-  def __init__(self, board, revealed, constraints, verbose=False):
+  def __init__(self, board, revealed, constraints, verbose=False, max_inexact_stages=-1):
     self.board = board
     self.revealed = revealed
     self.ineq_set = InequalitySet(verbose=verbose)
     self.constraints = self.convert_constraints(constraints)
     self.verbose = verbose
+    self.max_inexact_stages = max_inexact_stages
 
     self.flagged = []
     self.newly_revealed = []
@@ -423,6 +424,7 @@ class Puzzle(object):
 
   def solve(self):
     self.newly_revealed = self.revealed[:]
+    max_inexact_stages = self.max_inexact_stages
     total_diff = 1
 
     while self.ineq_set.ineqs and (total_diff > 0 or self.ineq_set.num_added > 0):
@@ -435,8 +437,13 @@ class Puzzle(object):
       total_diff += abs(self.record_stage(self.ineq_set.cross_all, add_inexact=False))
 
       if total_diff > 0:
+        max_inexact_stages = self.max_inexact_stages
         self.record_stage(self.ineq_set.purge, lambda x: not x.exact)
       else:
+        if max_inexact_stages == 0:
+          return False
+        max_inexact_stages -= 1
+
         total_diff += abs(self.record_stage(self.ineq_set.cross_all, add_inexact=True))
 
       trivial_ineqs = self.ineq_set.find_trivial()

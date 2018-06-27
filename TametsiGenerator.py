@@ -5,6 +5,7 @@ from TametsiSolver import Puzzle, uncompress
 
 
 difficulty_step_cache = {}
+MAX_INEXACT_STAGES = -1
 
 
 def extract_difficulty_steps(puzzle):
@@ -13,7 +14,7 @@ def extract_difficulty_steps(puzzle):
   for round in puzzle.rounds:
     difficulty_steps[-1] += 1
 
-    if len(round['trivial'][-1]):
+    if 'trivial' in round and len(round['trivial'][-1]):
       difficulty_steps.append(0)
 
   if difficulty_steps[-1] == 0:
@@ -50,7 +51,7 @@ def get_difficulty_steps(width, height, compressed):
 
   if key not in difficulty_step_cache:
     board, revealed, constraints = uncompress(width, height, compressed)
-    puzzle = Puzzle(board, revealed, constraints)
+    puzzle = Puzzle(board, revealed, constraints, max_inexact_stages=MAX_INEXACT_STAGES)
     solved = puzzle.solve()
     difficulty_step_cache[key] = solved, extract_difficulty_steps(puzzle)
 
@@ -171,10 +172,10 @@ def iteration_demo(width, height):
     temp_best = base
 
     iteration = 0
-    print("Round {}: ".format(round_num), end='', flush=True)
+    # print("Round {}: ".format(round_num), end='', flush=True)
 
     while 1:
-      print(iteration % 10, end='', flush=True)
+      # print(iteration % 10, end='', flush=True)
       iteration += 1
 
       variants = {}
@@ -188,7 +189,7 @@ def iteration_demo(width, height):
 
           if v not in variants:
             variants[v] = metric(width, height, v)
-            print('.', end='', flush=True)
+            # print('.', end='', flush=True)
 
       best = sorted(variants.items(), key=lambda x: x[1])[-1]
 
@@ -198,7 +199,7 @@ def iteration_demo(width, height):
         temp_best = base
 
       else:
-        print()
+        # print()
         break
 
     print("Best of round {}: {} with score {} and steps {}".format(round_num, temp_best, temp_max, get_difficulty_steps(width, height, temp_best)))
@@ -215,5 +216,6 @@ if __name__ == '__main__':
     w, h = map(int, sys.argv[1:3])
   else:
     w, h = 6, 6
+  MAX_INEXACT_STAGES = 1
   iteration_demo(w, h)
   # evolutionary_demo(w, h, int(sys.argv[3]) if len(sys.argv) > 3 else 10)
