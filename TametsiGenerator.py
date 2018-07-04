@@ -4,7 +4,6 @@ import random
 from TametsiSolver import Puzzle, uncompress
 
 
-difficulty_step_cache = {}
 MAX_INEXACT_STAGES = -1
 CACHE = {}
 
@@ -64,18 +63,6 @@ def CL_demo(num):
 
   difficulty_steps = get_difficulty_steps(width, height, compressed)
   print("Score:", difficulty_steps)
-
-
-# def get_difficulty_steps(width, height, compressed):
-#   key = (width, height, compressed)
-
-#   if key not in difficulty_step_cache:
-#     board, revealed, constraints = uncompress(width, height, compressed)
-#     puzzle = Puzzle(board, revealed, constraints, max_inexact_stages=MAX_INEXACT_STAGES)
-#     solved = puzzle.solve()
-#     difficulty_step_cache[key] = solved, extract_difficulty_steps(puzzle)
-
-#   return difficulty_step_cache[key]
 
 
 @cached
