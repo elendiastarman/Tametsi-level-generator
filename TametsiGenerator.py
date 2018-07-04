@@ -6,6 +6,26 @@ from TametsiSolver import Puzzle, uncompress
 
 difficulty_step_cache = {}
 MAX_INEXACT_STAGES = -1
+CACHE = {}
+
+
+def cached(func):
+  def wrapped(*args, **kwargs):
+    cache_only = kwargs.pop('cache_only', False)
+    key = tuple([func.__name__] + list(args))
+
+    if key in CACHE:
+      return CACHE[key]
+
+    else:
+      if cache_only:
+        return None
+
+      value = func(*args, **kwargs)
+      CACHE[key] = value
+      return value
+
+  return wrapped
 
 
 def extract_difficulty_steps(puzzle):
@@ -46,16 +66,24 @@ def CL_demo(num):
   print("Score:", difficulty_steps)
 
 
+# def get_difficulty_steps(width, height, compressed):
+#   key = (width, height, compressed)
+
+#   if key not in difficulty_step_cache:
+#     board, revealed, constraints = uncompress(width, height, compressed)
+#     puzzle = Puzzle(board, revealed, constraints, max_inexact_stages=MAX_INEXACT_STAGES)
+#     solved = puzzle.solve()
+#     difficulty_step_cache[key] = solved, extract_difficulty_steps(puzzle)
+
+#   return difficulty_step_cache[key]
+
+
+@cached
 def get_difficulty_steps(width, height, compressed):
-  key = (width, height, compressed)
-
-  if key not in difficulty_step_cache:
-    board, revealed, constraints = uncompress(width, height, compressed)
-    puzzle = Puzzle(board, revealed, constraints, max_inexact_stages=MAX_INEXACT_STAGES)
-    solved = puzzle.solve()
-    difficulty_step_cache[key] = solved, extract_difficulty_steps(puzzle)
-
-  return difficulty_step_cache[key]
+  board, revealed, constraints = uncompress(width, height, compressed)
+  puzzle = Puzzle(board, revealed, constraints, max_inexact_stages=MAX_INEXACT_STAGES)
+  solved = puzzle.solve()
+  return solved, extract_difficulty_steps(puzzle)
 
 
 def raw_difficulty(width, height, compressed, multiplier=100):
@@ -202,7 +230,11 @@ def iteration_demo(width, height):
         # print()
         break
 
-    print("Best of round {}: {} with score {} and steps {}".format(round_num, temp_best, temp_max, get_difficulty_steps(width, height, temp_best)))
+    output = "Best of round {}: {} with score {}".format(round_num, temp_best, temp_max)
+    if temp_max > -1:
+      output += " and steps {}".format(get_difficulty_steps(width, height, temp_best))
+    print(output)
+
     if temp_max > max_score:
       max_score = temp_max
       print(" ^ Best so far!")
