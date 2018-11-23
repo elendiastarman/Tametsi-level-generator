@@ -3,14 +3,14 @@ import sys
 import datetime
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+from TametsiGenerator import smooth_difficulty
+
 env = Environment(
   loader=FileSystemLoader('.'),
   autoescape=select_autoescape(['xml']),
 )
 
 level_template = env.get_template('leveltemplate.xml')
-
-# print(template.render(title="test"))
 
 
 def write_level(width, height, compressed, **parameters):
@@ -21,7 +21,7 @@ def write_level(width, height, compressed, **parameters):
   params.update(parameters)
 
   tile_size = params['tile_size']
-  points = '-{s},-{s},{s},-{s},{s},{s},-{s},{s}'.format(s=tile_size / 2)
+  points = '-{s},-{s},{s},-{s},{s},{s},-{s},{s}'.format(s=0.96 * tile_size / 2)
 
   nodes = []
   columns = []
@@ -70,7 +70,12 @@ def write_level(width, height, compressed, **parameters):
 
   level = level_template.render(**params)
 
-  name = 'puzzles/{}_{}.puz'.format(datetime.datetime.strftime(datetime.datetime.now(), '%Y%m%d'), params['title'])
+  today = datetime.datetime.strftime(datetime.datetime.now(), '%Y%m%d')
+  filename_safe_title = params['title'].replace(' ', '-')
+
+  name = 'puzzles/{}_{}.puz'.format(today, filename_safe_title)
+  print("Filename:", name)
+
   with open(name, 'w') as file:
     file.write(level)
 
@@ -84,6 +89,11 @@ if __name__ == '__main__':
     height = int(sys.argv[2])
     compressed = sys.argv[3]
 
-  title = 'test_' + compressed.replace('.', '0').replace('*', '1').replace('?', '2')
+  # title = 'test_' + compressed.replace('.', '0').replace('*', '1').replace('?', '2')
+  # tile_text = 'EXP'
 
-  write_level(width, height, compressed, title=title)
+  score = round(smooth_difficulty(width, height, compressed), 2)
+  title = 'Combination Lock {}x{} with score {}'.format(width, height, score)
+  tile_text = 'CLX'
+
+  write_level(width, height, compressed, title=title, score=score, tile_text=tile_text)
