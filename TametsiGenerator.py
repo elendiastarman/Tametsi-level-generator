@@ -11,7 +11,7 @@ CACHE = {}
 def cached(func):
   def wrapped(*args, **kwargs):
     cache_only = kwargs.pop('cache_only', False)
-    key = tuple([func.__name__] + list(args))
+    key = tuple([func.__name__] + list(map(str, args)))
 
     if key in CACHE:
       return CACHE[key]
@@ -61,20 +61,19 @@ def CL_demo(num):
   solved = puzzle.solve()
   print("Solved?", solved)
 
-  difficulty_steps = get_difficulty_steps(width, height, compressed)
+  difficulty_steps = get_difficulty_steps(board, revealed, constraints)
   print("Score:", difficulty_steps)
 
 
 @cached
-def get_difficulty_steps(width, height, compressed):
-  board, revealed, constraints = uncompress(width, height, compressed)
+def get_difficulty_steps(board, revealed, constraints):
   puzzle = Puzzle(board, revealed, constraints, max_inexact_stages=MAX_INEXACT_STAGES)
   solved = puzzle.solve()
   return solved, extract_difficulty_steps(puzzle)
 
 
-def raw_difficulty(width, height, compressed, multiplier=100):
-  solved, difficulty_steps = get_difficulty_steps(width, height, compressed)
+def raw_difficulty(board, revealed, constraints, multiplier=100):
+  solved, difficulty_steps = get_difficulty_steps(board, revealed, constraints)
 
   if not solved:
     return -1
@@ -82,11 +81,8 @@ def raw_difficulty(width, height, compressed, multiplier=100):
   return sum([multiplier ** x for x in difficulty_steps])
 
 
-def smooth_difficulty(width, height, compressed):
-  if not sanity_check(width, height, compressed):
-    return -1
-
-  solved, difficulty_steps = get_difficulty_steps(width, height, compressed)
+def smooth_difficulty(board, revealed, constraints):
+  solved, difficulty_steps = get_difficulty_steps(board, revealed, constraints)
 
   if not solved:
     return -1
@@ -122,7 +118,7 @@ def random_demo(width, height):
 
   while 1:
     compressed = ''.join([random.choice('..*') for x in range(width * height)])
-    collapsed = raw_difficulty(width, height, compressed)
+    collapsed = raw_difficulty(*uncompress(width, height, compressed))
 
     if collapsed > max_score:
       max_score = collapsed
@@ -136,7 +132,7 @@ def evolutionary_demo(width, height, seeds=10):
 
   for _ in range(seeds):
     compressed = ''.join([random.choice(choices) for x in range(width * height)])
-    board_strings[compressed] = metric(width, height, compressed)
+    board_strings[compressed] = metric(*uncompress(width, height, compressed))
 
   best = sorted(board_strings.keys(), key=lambda x: board_strings[x])
 
@@ -160,7 +156,7 @@ def evolutionary_demo(width, height, seeds=10):
           nstr = nstr[:i] + random.choice(choices) + nstr[i + 1:]
 
       if nstr not in board_strings:
-        board_strings[nstr] = metric(width, height, nstr)
+        board_strings[nstr] = metric(*uncompress(width, height, nstr))
 
         if board_strings[nstr] > board_strings[best[0]]:
           added_to_best = True
@@ -170,20 +166,26 @@ def evolutionary_demo(width, height, seeds=10):
     print("Best of round {}:".format(round_num))
     for bstr in best:
       score = board_strings[bstr]
-      steps = get_difficulty_steps(width, height, bstr) if score > -1 else []
+      steps = get_difficulty_steps(*uncompress(width, height, bstr)) if score > -1 else []
       print("String {} had score {} (steps: {}).".format(bstr, score, steps))
 
 
 def iteration_demo(width, height):
   choices = '....**?'
   metric = smooth_difficulty
+  unpacker = uncompress
   max_score = 0
   round_num = 0
 
   while 1:
     round_num += 1
     base = ''.join([random.choice(choices) for x in range(width * height)])
-    temp_max = metric(width, height, base)
+
+    if sanity_check(width, height, base):
+      temp_max = metric(*unpacker(width, height, base))
+    else:
+      temp_max = -1
+
     temp_best = base
 
     iteration = 0
@@ -203,7 +205,10 @@ def iteration_demo(width, height):
           v = base[:i] + c + base[i + 1:]
 
           if v not in variants:
-            variants[v] = metric(width, height, v)
+            if sanity_check(width, height, v):
+              variants[v] = metric(*unpacker(width, height, v))
+            else:
+              variants[v] = -1
             # print('.', end='', flush=True)
 
       best = sorted(variants.items(), key=lambda x: x[1])[-1]
@@ -219,7 +224,7 @@ def iteration_demo(width, height):
 
     output = "Best of round {}: {} with score {}".format(round_num, temp_best, temp_max)
     if temp_max > -1:
-      output += " and steps {}".format(get_difficulty_steps(width, height, temp_best))
+      output += " and steps {}".format(get_difficulty_steps(*unpacker(width, height, temp_best)))
     print(output)
 
     if temp_max > max_score:
