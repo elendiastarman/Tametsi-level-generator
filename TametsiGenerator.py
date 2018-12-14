@@ -5,6 +5,7 @@ from TametsiSolver import Puzzle, uncompress
 
 
 MAX_INEXACT_STAGES = -1
+VERBOSE = False
 CACHE = {}
 
 
@@ -67,7 +68,7 @@ def CL_demo(num):
 
 @cached
 def get_difficulty_steps(board, revealed, constraints):
-  puzzle = Puzzle(board, revealed, constraints, max_inexact_stages=MAX_INEXACT_STAGES)
+  puzzle = Puzzle(board, revealed, constraints, max_inexact_stages=MAX_INEXACT_STAGES, verbose=VERBOSE)
   solved = puzzle.solve()
   return solved, extract_difficulty_steps(puzzle)
 
@@ -88,7 +89,7 @@ def smooth_difficulty(board, revealed, constraints):
     return -1
 
   if len(difficulty_steps) < 2 or 0 in difficulty_steps:
-    return -1
+    return -0.5
 
   score = 0
 
@@ -236,10 +237,14 @@ if __name__ == '__main__':
   # CL_demo(int(sys.argv[1]) if len(sys.argv) > 1 else 1)
   # random_demo(6, 6)
   # evolutionary_demo(6, 6, int(sys.argv[1]) if len(sys.argv) > 1 else 10)
+
   if len(sys.argv) > 2:
     w, h = map(int, sys.argv[1:3])
   else:
     w, h = 6, 6
+
   MAX_INEXACT_STAGES = 1
   iteration_demo(w, h)
+  VERBOSE = False
+
   # evolutionary_demo(w, h, int(sys.argv[3]) if len(sys.argv) > 3 else 10)
