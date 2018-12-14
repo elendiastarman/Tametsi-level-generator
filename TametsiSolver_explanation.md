@@ -42,13 +42,61 @@ Crossing `X` and `Y` will produce two or three inequalities corresponding to `X 
 
 ## Reducing Inequalities
 
+Once trivial inequalities have been found and the corresponding tiles revealed or flagged, it's time to adjust inequalities that overlap with any trivial inequality. The sets of newly revealed and newly flagged tiles are calculated and every existing inequality is checked to see how much they overlap with these two sets. 
+
 # Improvements
 
-* tiles encoded in binary
-* exact inequalities
-* inequality map
+## Tiles Encoded As Binary
+
+Originally, tiles were tracked in `set` objects. Operations involving sets, such as unions, intersections, and differences, are comparatively slow in Python. Conveniently, Python's native biginteger support meant that I could encode the tiles in an inequality as a binary number where each digit was a 1 to indicate that tile was in the set and 0 otherwise. Thus, unions become binary OR, intersections become binary AND, and differences become binary AND NOT. In Python operations, these are `X & Y`, `X | Y`, and `X & ~Y`. This conferred quite a significant speedup, which makes sense; binary operations are usually pretty optimized already.
+
+## Exact Inequalities
+
+An "exact" inequality is one where a given inequality `X` has `X.min == X.max`. As it turns out, exact inequalities are somehow quite useful. Generally, working *only* with exact inequalities confers a massive speed improvement, largely because there aren't as many that can be derived from a given set of inequalities. However, they are not *sufficient* to deduce every logic step of all puzzles. For example, Combination Lock VI has one step that requires deriving inexact inequalities. Hence, for every step, exact inequalities are derived first and then if no progress is made, inexact inequalities are derived. Leaving these inexact inequalities around slows down the solver quite a bit because there's so many of them. Hence, so immediately after any cells are revealed or flagged, all inexact inequalities are deleted.
+
+My solver allows you to configure the number of allowed "inexact rounds", so to speak, that specifies the maximum number of consecutive rounds that have to use inexact inequalities. The counter resets every time inexact inequalities are purged, so it's possible to have the max number of inexact rounds be 1 and still have three such rounds in a puzzle; they just can't be consecutive. I have found that setting this max to 1 produces relatively good puzzles; fewer than that tends to produce easier puzzles and more than that tends to produce weaker/messier puzzles and/or make them less satisfying to solve.
+
+## Inequality Map
+
+Realistically, any given set of tiles has at most one known inequality. Hence, the solver maintains a mapping from the tiles in an inequality to the min and max of that inequality. If a new inequality is derived that has the same tiles as one already known, then that means both can be replaced with a more accurate inequality that takes both pairs of bounds into account. That is, if `X.cells == Y.cells`, then (calling the new one `Z` for convenience) `Z.min = max(X.min, Y.min)` and `Z.max = min(X.max, Y.max)`.
 
 # Extensions
 
 * record stage
 * parent tracking
+
+# Scoring
+
+Scoring a puzzle is actually rather difficult. Rating the difficulty of a puzzle is already a rather subjective experience for humans, let alone an algorithm. Thus far, I've only experimented with scoring methods that look at the number of rounds it took to deduce each logical step. In general, the more rounds it took, the harder it is to make that logical deduction. Most of the time, it takes just 1 round, but I have seen them go as high as 7, though that is of course quite rare.
+
+## Smooth Difficulty
+
+I initially scored my puzzles very simply: just look at how many of each difficulty level there are. I later developed a different scoring algorithm that attempts to optimize for "smoothness" in the difficulty curve. So [1, 3, 3, 1] should be better than [1, 5, 1, 1].
+
+Excepting unsolvable and trivial puzzles, the smooth difficulty score is calculated by taking every adjacent pair of steps `a, b`, calculating intermediate scores, and then summing them up. The intermediate score for a given pair of steps `a, b` is calculated by setting `x = min(a, b)` and `y = max(a, b)` and then calculating `x * (y - 1) / (y - x + 1)`. The intent is to reward similarity between `a` and `b` as well as rewarding higher values for them.
+
+Let's suppose a given puzzle has steps of difficulty [1, 3, 2, 1, 3, 1]. Then the pairs and intermediate scores are as follows:
+
+```
+1, 3 -> 1 * (3 - 1) / (3 - 1 + 1) = 2 / 3 ~= 0.667
+3, 2 -> 2 * (3 - 1) / (3 - 2 + 1) = 4 / 2 ~= 2.0
+2, 1 -> 1 * (2 - 1) / (2 - 1 + 1) = 1 / 2 ~= 0.5
+1, 3 ~= 0.667
+3, 1 ~= 0.667
+```
+
+Which sums up to about 4.5 altogether.
+
+Now let's suppose it instead had difficulty steps of [1, 1, 6, 1, 1].
+
+```
+1, 1 -> 1 * (1 - 1) / (1 - 1 + 1) = 0
+1, 1 = 0
+1, 6 -> 1 * (6 - 1) / (6 - 1 + 1) = 5 / 5 = 1
+1, 1 = 0
+1, 1 = 0
+```
+
+Which sums up to 1 altogether.
+
+So a puzzle that has a few medium difficulty steps will score much higher than a puzzle that just has one really hard step. My intent is that this produces puzzles that are more enjoyable to play given that the difficulty curve tends to be a bit more level.
