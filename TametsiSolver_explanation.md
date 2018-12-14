@@ -42,7 +42,11 @@ Crossing `X` and `Y` will produce two or three inequalities corresponding to `X 
 
 ## Reducing Inequalities
 
-Once trivial inequalities have been found and the corresponding tiles revealed or flagged, it's time to adjust inequalities that overlap with any trivial inequality. The sets of newly revealed and newly flagged tiles are calculated and every existing inequality is checked to see how much they overlap with these two sets. 
+Once trivial inequalities have been found and the corresponding tiles revealed or flagged, it's time to adjust inequalities that overlap with any trivial inequality. The sets of newly revealed `R` and newly flagged `F` tiles are calculated and every existing inequality is checked to see how much they overlap with these two sets. If a given inequality `X` has had all its tiles revealed and/or flagged, then it is simply removed. Otherwise, a new inequality `Z` is created:
+
+* `Z = X - R - F` because it's simply the cells of `X` without those in `R` or `F`.
+* minimum: `min(max(X.min - (X * F).len, 0), Z.len)` because it's the previous min minus all the flagged cells, unless the number of remaining cells is smaller or it's 0.
+* maximum: `min(X.max - (X * F).len, Z.len)` because it's the previous max minus all the flagged cells except when the remaining number of cells is smaller.
 
 # Improvements
 
@@ -60,14 +64,16 @@ My solver allows you to configure the number of allowed "inexact rounds", so to 
 
 Realistically, any given set of tiles has at most one known inequality. Hence, the solver maintains a mapping from the tiles in an inequality to the min and max of that inequality. If a new inequality is derived that has the same tiles as one already known, then that means both can be replaced with a more accurate inequality that takes both pairs of bounds into account. That is, if `X.cells == Y.cells`, then (calling the new one `Z` for convenience) `Z.min = max(X.min, Y.min)` and `Z.max = min(X.max, Y.max)`.
 
-# Extensions
+## Extensions
 
-* record stage
-* parent tracking
+These are not at all necessary for solving or generating puzzles, but I've included them as features of my solver.
+
+* **Recording Stages**: a round can have multiple stages (make new inequalities, cross them all, purge inexact inequalities, find trivial inequalities, reduce inequalities) and a helper function `record_stage` will take note of the number of inequalities before and after the operation. One way this is useful is to know if any new inequalities were created or removed in a stage. If no inequalities are created or removed during an entire round, the puzzle is considered unsolvable.
+* **Ancestry:** I don't think I actually use this feature at all, but ostensibly, every inequality also has a record of its parents and the round it was created in.
 
 # Scoring
 
-Scoring a puzzle is actually rather difficult. Rating the difficulty of a puzzle is already a rather subjective experience for humans, let alone an algorithm. Thus far, I've only experimented with scoring methods that look at the number of rounds it took to deduce each logical step. In general, the more rounds it took, the harder it is to make that logical deduction. Most of the time, it takes just 1 round, but I have seen them go as high as 7, though that is of course quite rare.
+Scoring a puzzle accurately is actually rather difficult. Rating the difficulty of a puzzle is already a rather subjective experience for humans, let alone an algorithm. Thus far, I've only experimented with scoring methods that look at the number of rounds it took to deduce each logical step. In general, the more rounds it took, the harder it is to make that logical deduction. Most of the time, it takes just 1 round, but I have seen them go as high as 7, though that is of course quite rare.
 
 ## Smooth Difficulty
 
