@@ -2,6 +2,8 @@
 
 At its core, Tametsi is little more than solving a system of inequalities. For any given group of cells X, there is a minimum number Y and a maximum number Z of mines within that group of cells. By combining an given set of inequalities, starting with the row/column and color hints, further inequalities can be derived. Eventually, one gets so-called "trivial" inequalities where the number of mines in a group of cells is either 0 (so all of them can be revealed) or the same as the number of cells (so all of them are mines and should be flagged). After deriving these trivial inequalities, known inequalities can be adjusted and new inequalities can be created from newly-revealed hints. The difficulty in solving puzzles lies in combining inequalities to produce more.
 
+What follows is a fairly high-level explanation of how [TametsiSolver.py](./TametsiSolver.py) works.
+
 # Core
 
 As mentioned earlier, inequalities consist of three pieces of information:
