@@ -1,5 +1,7 @@
 import sys
 import random
+import hashlib
+import operator
 
 from TametsiSolver import Puzzle, uncompress
 
@@ -13,19 +15,25 @@ def cached(func):
   def wrapped(*args, **kwargs):
     cache_only = kwargs.pop('cache_only', False)
     key = tuple([func.__name__] + list(map(str, args)))
+    keyhash = hashlib.sha1(bytes(str(key), encoding='utf-8')).hexdigest()
 
-    if key in CACHE:
-      return CACHE[key]
+    if keyhash in CACHE:
+      return CACHE[keyhash]
 
     else:
       if cache_only:
         return None
 
       value = func(*args, **kwargs)
-      CACHE[key] = value
+      CACHE[keyhash] = value
       return value
 
   return wrapped
+
+
+def clear_cache():
+  global CACHE
+  CACHE = dict()
 
 
 def extract_difficulty_steps(puzzle):
@@ -67,10 +75,37 @@ def CL_demo(num):
 
 
 @cached
-def get_difficulty_steps(board, revealed, constraints):
+def solve_puzzle(board, revealed, constraints):
   puzzle = Puzzle(board, revealed, constraints, max_inexact_stages=MAX_INEXACT_STAGES, verbose=VERBOSE)
   solved = puzzle.solve()
+  return puzzle, solved
+
+
+@cached
+def get_difficulty_steps(board, revealed, constraints):
+  puzzle, solved = solve_puzzle(board, revealed, constraints)
   return solved, extract_difficulty_steps(puzzle)
+
+
+@cached
+def measure_branching_factor(board, revealed, constraints):
+  puzzle, solved = solve_puzzle(board, revealed, constraints)
+
+  if not solved:
+    return -1
+
+  score = 0
+  steps = 0
+
+  for round in puzzle.rounds:
+    steps += 1
+
+    if 'trivial' in round and len(round['trivial'][-1]):
+      if steps > 1:
+        score += steps / len(round['trivial'][0] + round['trivial'][1])
+      steps = 0
+
+  return score
 
 
 def raw_difficulty(board, revealed, constraints, multiplier=100):
@@ -171,23 +206,34 @@ def evolutionary_demo(width, height, seeds=10):
       print("String {} had score {} (steps: {}).".format(bstr, score, steps))
 
 
-def iteration_demo(width, height):
+def iteration_demo(width, height, invert_sort=False, metric=None):
   choices = '....**?'
-  metric = smooth_difficulty
   unpacker = uncompress
-  max_score = 0
+
+  if metric is None:
+    metric = smooth_difficulty
+
+  if invert_sort:
+    limit = float('inf')
+    comp = operator.lt
+  else:
+    limit = 0
+    comp = operator.gt
+  threshold = limit
+
   round_num = 0
+  scores = []
 
   while 1:
+    clear_cache()
     round_num += 1
     base = ''.join([random.choice(choices) for x in range(width * height)])
+    temp_best = base
 
     if sanity_check(width, height, base):
-      temp_max = metric(*unpacker(width, height, base))
+      temp_threshold = metric(*unpacker(width, height, base))
     else:
-      temp_max = -1
-
-    temp_best = base
+      temp_threshold = limit
 
     iteration = 0
     # print("Round {}: ".format(round_num), end='', flush=True)
@@ -209,27 +255,28 @@ def iteration_demo(width, height):
             if sanity_check(width, height, v):
               variants[v] = metric(*unpacker(width, height, v))
             else:
-              variants[v] = -1
+              variants[v] = limit
             # print('.', end='', flush=True)
 
-      best = sorted(variants.items(), key=lambda x: x[1])[-1]
+      best = sorted(variants.items(), key=lambda x: x[1], reverse=invert_sort)[-1]
 
-      if best[1] > temp_max:
-        base = best[0]
-        temp_max = best[1]
-        temp_best = base
+      if comp(best[1], temp_threshold):
+        temp_best = best[0]
+        temp_threshold = best[1]
 
       else:
-        # print()
         break
 
-    output = "Best of round {}: {} with score {}".format(round_num, temp_best, temp_max)
-    if temp_max > -1:
-      output += " and steps {}".format(get_difficulty_steps(*unpacker(width, height, temp_best)))
-    print(output)
+    scores.append(temp_threshold)
 
-    if temp_max > max_score:
-      max_score = temp_max
+    if comp(temp_threshold, sum(scores) / len(scores)):
+      output = "Best of round {}: {} with score {}".format(round_num, temp_best, temp_threshold)
+      if comp(temp_threshold, limit):
+        output += " and steps {}".format(get_difficulty_steps(*unpacker(width, height, temp_best)))
+      print(output)
+
+    if comp(temp_threshold, threshold):
+      threshold = temp_threshold
       print(" ^ Best so far!")
 
 
@@ -244,7 +291,8 @@ if __name__ == '__main__':
     w, h = 6, 6
 
   MAX_INEXACT_STAGES = 1
-  iteration_demo(w, h)
   VERBOSE = False
 
+  # iteration_demo(w, h)
+  iteration_demo(w, h, invert_sort=False, metric=measure_branching_factor)
   # evolutionary_demo(w, h, int(sys.argv[3]) if len(sys.argv) > 3 else 10)

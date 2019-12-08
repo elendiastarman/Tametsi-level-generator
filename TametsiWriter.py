@@ -3,7 +3,8 @@ import sys
 import datetime
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from TametsiGenerator import smooth_difficulty
+from TametsiSolver import uncompress
+from TametsiGenerator import smooth_difficulty, measure_branching_factor
 
 env = Environment(
   loader=FileSystemLoader('.'),
@@ -91,9 +92,10 @@ if __name__ == '__main__':
 
   # title = 'test_' + compressed.replace('.', '0').replace('*', '1').replace('?', '2')
   # tile_text = 'EXP'
+  metric = [smooth_difficulty, measure_branching_factor][1]
 
-  score = round(smooth_difficulty(width, height, compressed), 2)
-  title = 'Combination Lock {}x{} with score {}'.format(width, height, score)
+  score = round(metric(*uncompress(width, height, compressed)), 2)
+  title = 'Combination Lock {}x{} with branching score {}'.format(width, height, score)
   tile_text = 'CLX'
 
   write_level(width, height, compressed, title=title, score=score, tile_text=tile_text)
