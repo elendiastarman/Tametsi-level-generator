@@ -296,42 +296,49 @@ class CellOverlaps(object):
     # Need to bootstrap for new bits
     mask = 1
     while mask <= cells:
-      if mask & cells and mask not in self.overlaps:
-        self.overlaps[mask] = {cells}
+      if mask & cells:
+        self.overlaps.setdefault(mask, set()).add(cells)
         self.groups[1].add(mask)
 
       mask *= 2
 
-    to_add = dict()
-    seen = set()
+    # while mask <= cells:
+    #   if mask & cells and mask not in self.overlaps:
+    #     self.overlaps[mask] = {cells}
+    #     self.groups[1].add(mask)
 
-    for overlap, group in self._walk():
-      if not cells & overlap:
-        continue
+    #   mask *= 2
 
-      # Can add additional overlaps based on other ineqs
-      for other in group:
-        if other not in seen:
-          seen.add(other)
+    # to_add = dict()
+    # seen = set()
 
-          shared = cells & other
-          if shared not in self.overlaps:
-            if shared not in to_add:
-              to_add[shared] = {cells}
+    # for overlap, group in self._walk():
+    #   if not cells & overlap:
+    #     continue
 
-            to_add[shared].add(other)
+    #   # Can add additional overlaps based on other ineqs
+    #   for other in group:
+    #     if other not in seen:
+    #       seen.add(other)
 
-      # If overlap is a subset of cells, insert
-      if ~cells & overlap == 0:
-        group.add(cells)
+    #       shared = cells & other
+    #       if shared not in self.overlaps:
+    #         if shared not in to_add:
+    #           to_add[shared] = {cells}
 
-    for new_overlap, new_group in to_add.items():
-      self.overlaps[new_overlap] = new_group
-      bit_count = bin(cells).count('1')
+    #         to_add[shared].add(other)
 
-      while bit_count > len(self.groups):
-        self.groups.append(set())
-      self.groups.append({new_overlap})
+    #   # If overlap is a subset of cells, insert
+    #   if ~cells & overlap == 0:
+    #     group.add(cells)
+
+    # for new_overlap, new_group in to_add.items():
+    #   self.overlaps[new_overlap] = new_group
+    #   bit_count = bin(cells).count('1')
+
+    #   while bit_count > len(self.groups):
+    #     self.groups.append(set())
+    #   self.groups.append({new_overlap})
 
   def remove(self, ineq):
     cells = ineq.cells
@@ -816,7 +823,7 @@ def uncompress(width, height, compressed):
 def demo2():
   # Combination Lock levels
 
-  level = 1
+  level = 6
 
   if level == 1:
     # Combination Lock I
