@@ -34,14 +34,28 @@ def extend_unique(list1, list2):
       list1.append(x)
 
 
+def cells_to_binary(cells):
+  num = 0
+  for x in cells:
+    num += 2 ** x
+  return num
+
+
+def binary_to_cells(num):
+  cells = set()
+
+  i, j = 0, 1
+  while j <= num:
+    if j & num:
+      cells.add(i)
+
+    i, j = i + 1, j * 2
+
+  return cells
+
+
 class CellInequality(object):
   def __init__(self, cells, bounds, parents=None, round_num=0):
-    if hasattr(cells, '__iter__'):
-      temp = 0
-      for x in cells:
-        temp += 2 ** x
-      cells = temp
-
     self.cells = cells
     self.num = bin(cells).count('1')
     self.bounds = tuple()
@@ -78,17 +92,15 @@ class CellInequality(object):
 
   @property
   def cell_nums(self):
-    nums = set()
-    temp = self.cells
+    return binary_to_cells(self.cells)
 
-    i, j = 0, 1
-    while j <= temp:
-      if j & temp:
-        nums.add(i)
+  @property
+  def min(self):
+    return self.bounds[0]
 
-      i, j = i + 1, j * 2
-
-    return nums
+  @property
+  def max(self):
+    return self.bounds[1]
 
   def isdisjoint(self, other):
     if not isinstance(other, CellInequality):
@@ -103,9 +115,6 @@ class CellInequality(object):
     return self.cells & other.cells == self.cells
 
   def issuperset(self, other):
-    if not isinstance(other, CellInequality):
-      raise ValueError("Other must be an inequality, not a {} (it is: {} )".format(type(other), other))
-
     return self.cells & other.cells == other.cells
 
   def cross(self, other, max_cells=9, max_mines=3):
@@ -258,6 +267,79 @@ class CellSetDict(object):
     return self.__class__(ineq_map=self.cell_set_map, strict=self.strict)
 
 
+class CellOverlaps(object):
+  def __init__(self):
+    self.overlaps = dict()
+    self.groups = [None, set()]  # 7 has three 1 bits whereas 8 has one; {1, 2, 4, 8, 16} < {3, 5, 6, 9, 10, 12} < {7, 11, 13, 14} < {15}
+
+  def _walk(self):
+    for index in range(len(self.groups) - 1, 0, -1):
+      for overlap in self.groups[index]:
+        yield overlap, self.overlaps[overlap]
+
+  def get_overlaps(self, ineq):
+    cells = ineq.cells
+
+    seen = set()
+    for overlap, group in self._walk():
+      if not cells & overlap:
+        continue
+
+      for item in group:
+        if item not in seen and item != cells:
+          seen.add(item)
+          yield item
+
+  def add(self, ineq):
+    cells = ineq.cells
+
+    # Need to bootstrap for new bits
+    mask = 1
+    while mask <= cells:
+      if mask & cells and mask not in self.overlaps:
+        self.overlaps[mask] = {cells}
+        self.groups[1].add(mask)
+
+      mask *= 2
+
+    to_add = dict()
+    seen = set()
+
+    for overlap, group in self._walk():
+      if not cells & overlap:
+        continue
+
+      # Can add additional overlaps based on other ineqs
+      for other in group:
+        if other not in seen:
+          seen.add(other)
+
+          shared = cells & other
+          if shared not in self.overlaps:
+            if shared not in to_add:
+              to_add[shared] = {cells}
+
+            to_add[shared].add(other)
+
+      # If overlap is a subset of cells, insert
+      if ~cells & overlap == 0:
+        group.add(cells)
+
+    for new_overlap, new_group in to_add.items():
+      self.overlaps[new_overlap] = new_group
+      bit_count = bin(cells).count('1')
+
+      while bit_count > len(self.groups):
+        self.groups.append(set())
+      self.groups.append({new_overlap})
+
+  def remove(self, ineq):
+    cells = ineq.cells
+    for overlap, group in self._walk():
+      if ~cells & overlap == 0 and cells in group:
+        group.remove(cells)
+
+
 class InequalitySet(object):
   def __init__(self, verbose=False):
     self.verbose = verbose
@@ -359,7 +441,7 @@ class InequalitySet(object):
           min(ineq.bounds[1] - num_flagged, len(new_cells)),
         )
 
-        self.add(CellInequality(new_cells, new_bounds, round_num=round_num))
+        self.add(CellInequality(cells_to_binary(new_cells), new_bounds, round_num=round_num))
 
 
 class Puzzle(object):
@@ -377,6 +459,8 @@ class Puzzle(object):
     self.rounds = []
 
   def convert_constraints(self, constraints):
+    converted = []
+
     for constraint in constraints:
       cells = []
       count = constraint[0]
@@ -386,7 +470,12 @@ class Puzzle(object):
           cells.append(c)
 
       if cells:
-        self.ineq_set.add(CellInequality(cells, (count, count)))
+        converted.append(CellInequality(cells_to_binary(cells), (count, count)))
+
+    for conv in converted:
+      self.ineq_set.add(conv)
+
+    return converted
 
   def make_new_inequalities(self):
     for c in self.newly_revealed:
@@ -402,7 +491,7 @@ class Puzzle(object):
               count += 1
 
         if cells:
-          self.ineq_set.add(CellInequality(cells, (count, count), round_num=len(self.rounds) - 1))
+          self.ineq_set.add(CellInequality(cells_to_binary(cells), (count, count), round_num=len(self.rounds) - 1))
 
     self.newly_revealed = []
 
@@ -479,6 +568,185 @@ class Puzzle(object):
 
     return len(self.ineq_set.ineqs.keys()) == 0
 
+  def solve_stream(self):
+    ineqs = CellSetDict()
+    overlaps = CellOverlaps()
+
+    # trivial = []
+    # fresh = self.constraints[:]
+    # revisit = []
+    # inexact = []
+    for const in self.constraints:
+      ineqs.add_ineq(const)
+      overlaps.add(const)
+
+    revealed = cells_to_binary(self.revealed)
+    flagged = 0
+    # done = False
+
+    board_ineqs = dict()
+    for tile_id, what, neighbors in self.board:
+      if what == '.':
+        cells = 0
+        count = 0
+
+        for neighbor in neighbors:
+          cells += 2 ** neighbor
+          if self.board[neighbor][1] == '*':
+            count += 1
+
+        if cells:
+          board_ineqs[tile_id] = CellInequality(cells, (count, count))
+
+    # if self.verbose:
+    #   print(board_ineqs.items())
+
+    # for _ in board_ineqs.items(): print(_)
+    for tile in self.revealed:
+      ineq = board_ineqs.pop(tile, None)
+      if ineq is not None:
+        # fresh.append(ineq)
+        ineqs.add_ineq(ineq)
+        overlaps.add(ineq)
+
+    priority = lambda x: (not x.trivial, not x.exact, min([x.min, x.num - x.max]))
+    resort = True
+    added = True
+    queue = []
+    max_steps = -100
+
+    while max_steps:
+      max_steps -= 1
+
+      if resort or not queue:
+        queue = sorted(ineqs.cell_set_map.values(), key=priority, reverse=True)
+        resort = False
+        added = False
+
+        # if self.verbose:
+        #   print('queue', '\n  '.join(map(str, queue)))
+
+      ineq = None
+
+      # target = trivial or fresh or revisit or inexact
+      # if target:
+      #   # target.sort(key=priority, reverse=True)
+      #   ineq = target.pop(0)
+      if queue:
+        ineq = queue.pop()
+
+      if ineq is None:
+        break
+
+      if not ineq.exact and added:
+        resort = True
+
+      if self.verbose:
+        print('ineq:', ineq)
+
+      # if 2**22 & ineq.cells: import ipdb; ipdb.set_trace()
+      revealed_overlap = revealed & ineq.cells
+      flagged_overlap = flagged & ineq.cells
+
+      # need to adjust inequality if any cells are revealed or flagged
+      if revealed_overlap or flagged_overlap:
+        ineqs.remove_ineq(ineq, strict=False)
+        overlaps.remove(ineq)
+        num_flagged = bin(flagged_overlap).count('1')
+
+        new_cells = ineq.cells & ~revealed & ~flagged
+        if not new_cells:
+          continue
+
+        new_num = bin(new_cells).count('1')
+        new_min = max([0, ineq.min - num_flagged])
+        new_max = min([new_num, ineq.max - num_flagged])
+
+        assert new_min <= new_max
+
+        ineq = CellInequality(new_cells, (new_min, new_max))
+        if self.verbose:
+          print('  ineq (adjusted):', ineq)
+
+      # just in case
+      added = ineqs.add_ineq(ineq) or added
+      ineq = ineqs.get_ineq(ineq.cells)
+      overlaps.add(ineq)
+
+      if ineq.trivial:
+        if self.verbose:
+          print('  trivial!')
+
+        if ineq.max == 0:  # revealed
+          for cell in binary_to_cells(~revealed & ineq.cells):
+            if cell in board_ineqs:
+              # fresh.append(board_ineqs[cell])
+              added = ineqs.add_ineq(board_ineqs[cell]) or added
+
+          revealed = revealed | ineq.cells
+
+        elif ineq.min == ineq.num:  # flagged
+          flagged = flagged | ineq.cells
+
+        ineqs.remove_ineq(ineq, strict=False)
+        overlaps.remove(ineq)
+        resort = True
+
+        # for cells in overlaps.get_overlaps(ineq):
+        #   re_ineq = ineqs.get_ineq(cells)
+
+        #   if re_ineq.exact and cells not in [_.cells for _ in revisit]:
+        #     print('    revisiting:', re_ineq)
+        #     revisit.append(re_ineq)
+        #   elif cells not in [_.cells for _ in inexact]:
+        #     print('    revisiting:', re_ineq)
+        #     inexact.append(re_ineq)
+        #     if 2**22 & cells: import ipdb; ipdb.set_trace()
+
+        continue
+
+      # # add to overlaps if need be
+      # if ineq.cells not in overlaps.overlaps:
+      #   overlaps.add(ineq)
+
+      # cross with overlaps
+      to_add = dict()
+      for other in overlaps.get_overlaps(ineq):
+        # if self.verbose:
+        #   print('  other:', binary_to_cells(other))
+
+        other_ineq = ineqs.get_ineq(other)
+        crossed = ineq.cross(other_ineq)
+
+        for new_ineq in crossed:
+          if new_ineq.cells & (revealed | flagged) or new_ineq.cells in [ineq.cells, other_ineq.cells]:
+            continue
+
+          # print('    cross:', new_ineq)
+          # if new_ineq.trivial and new_ineq.cells not in [_.cells for _ in trivial]:
+          #   trivial.append(new_ineq)
+          #   continue
+
+          # if new_ineq.cells in overlaps.overlaps and new_ineq.cells not in [_.cells for _ in revisit]:
+          #   revisit.append(new_ineq)
+          # elif new_ineq.exact and new_ineq.cells not in [_.cells for _ in fresh]:
+          #   fresh.append(new_ineq)
+          # elif new_ineq.cells not in [_.cells for _ in inexact]:
+          #   inexact.append(new_ineq)
+
+          if new_ineq.cells not in to_add:
+            to_add[new_ineq.cells] = new_ineq
+          added = ineqs.add_ineq(new_ineq) or added
+
+      for new_ineq in to_add.values():
+        overlaps.add(new_ineq)
+
+    # print(self.board)
+    print('revealed', binary_to_cells(revealed))
+    print('flagged', binary_to_cells(flagged))
+    # print(ineqs.cell_set_map.items())
+    # import ipdb; ipdb.set_trace()
+
 
 def demo1():
   # . * . *
@@ -501,7 +769,7 @@ def demo1():
   print('board:', board)
   print('constraints:', constraints)
 
-  print(Puzzle(board, revealed, constraints, verbose=True).solve())
+  print(Puzzle(board, revealed, constraints, verbose=True).solve_stream())
 
 
 def uncompress(width, height, compressed):
@@ -548,7 +816,7 @@ def uncompress(width, height, compressed):
 def demo2():
   # Combination Lock levels
 
-  level = 6
+  level = 1
 
   if level == 1:
     # Combination Lock I
@@ -593,7 +861,7 @@ def demo2():
   print('constraints:')
   pprint.pprint(constraints, width=160)
 
-  print(Puzzle(board, revealed, constraints, verbose=True).solve())
+  print(Puzzle(board, revealed, constraints, verbose=False).solve_stream())
 
 
 def demo3():
@@ -629,7 +897,7 @@ def demo3():
   print('board:', board)
   print('constraints:', constraints)
 
-  print(Puzzle(board, revealed, constraints, verbose=True).solve())
+  print(Puzzle(board, revealed, constraints, verbose=True).solve_stream())
 
 
 if __name__ == "__main__":
