@@ -186,7 +186,6 @@ class Puzzle(object):
     finished = False
 
     while max_steps and not finished:
-      # input('[enter]')
       max_steps -= 1
       finished = True
 
@@ -216,6 +215,9 @@ class Puzzle(object):
       for new_ineq in to_add:
         _, added = self.add_ineq(new_ineq, ineqs, index)
         finished = finished and not added
+
+      if not ineqs:
+        break
 
       # Stage: identify and organize
       trivial = []
@@ -277,13 +279,12 @@ class Puzzle(object):
       if exact:
         for left in exact:
           left_bounds = ineqs.get(left)
-          left_count = bin(left).count('1')
           if self.verbose:
             print(f'left exact: {binary_to_cells(left), left_bounds}')
             out2 = None
 
           # Skip if too many mines or cells in either
-          if left_count > max_cells and left_bounds[0] > max_mines:
+          if left_bounds[2] > max_cells and left_bounds[0] > max_mines:
             continue
 
           rights = set()
@@ -298,10 +299,9 @@ class Puzzle(object):
               continue
 
             right_bounds = ineqs.get(right)
-            right_count = bin(right).count('1')
 
             # Skip if too many mines or cells in either
-            if right_count > max_cells and right_bounds[0] > max_mines:
+            if right_bounds[2] > max_cells and right_bounds[0] > max_mines:
               continue
 
             # Postpone crossing with inexact
@@ -327,15 +327,13 @@ class Puzzle(object):
       if finished and exact and overlap_inexact:
         for left in exact:
           left_bounds = ineqs.get(left)
-          left_count = bin(left).count('1')
 
           # Skip if too many mines or cells in either
-          if left_count > max_cells and left_bounds[0] > max_mines:
+          if left_bounds[2] > max_cells and left_bounds[0] > max_mines:
             continue
 
           for right in overlap_inexact.get(left, set()):
             right_bounds = ineqs.get(right)
-            right_count = bin(right).count('1')
 
             crossed = self.cross_ineqs(left, left_bounds, right, right_bounds)
             for new_ineq in crossed:
@@ -346,10 +344,9 @@ class Puzzle(object):
       if finished and inexact:
         for left in inexact:
           left_bounds = ineqs.get(left)
-          left_count = bin(left).count('1')
 
           # Skip if too many mines or cells in either
-          if left_count > max_cells and left_bounds[0] > max_mines:
+          if left_bounds[2] > max_cells and left_bounds[0] > max_mines:
             continue
 
           rights = set()
@@ -364,10 +361,9 @@ class Puzzle(object):
               continue
 
             right_bounds = ineqs.get(right)
-            right_count = bin(right).count('1')
 
             # Skip if too many mines or cells in either
-            if right_count > max_cells and right_bounds[0] > max_mines:
+            if right_bounds[2] > max_cells and right_bounds[0] > max_mines:
               continue
 
             # Already crossed with exact
@@ -532,7 +528,7 @@ def demo3():
   print('board:', board)
   print('constraints:', constraints)
 
-  print(Puzzle(board, revealed, constraints, verbose=True).solve_fast())
+  print(Puzzle(board, revealed, constraints, verbose=False).solve_fast())
 
 
 if __name__ == "__main__":
