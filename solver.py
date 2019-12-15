@@ -126,22 +126,22 @@ class Puzzle(object):
     to_add.append([shared_num] + shared_bounds + [shared_count])
 
     nleft_num = left & ~right
-    nleft_count = bin(nleft_num).count('1')
     if nleft_num:
       nleft_bounds = [
         max(0, left_bounds[0] - shared_bounds[1]),
         min(left_bounds[2] - shared_count, max(0, left_bounds[1] - shared_bounds[0])),
+        bin(nleft_num).count('1'),
       ]
-      to_add.append([nleft_num] + nleft_bounds + [nleft_count])
+      to_add.append([nleft_num] + nleft_bounds)
 
     nright_num = ~left & right
-    nright_count = bin(nright_num).count('1')
     if nright_num:
       nright_bounds = [
         max(0, right_bounds[0] - shared_bounds[1]),
         min(right_bounds[2] - shared_count, max(0, right_bounds[1] - shared_bounds[0])),
+        bin(nright_num).count('1'),
       ]
-      to_add.append([nright_num] + nright_bounds + [nright_count])
+      to_add.append([nright_num] + nright_bounds)
 
     return to_add
 
@@ -172,16 +172,15 @@ class Puzzle(object):
         if cells:
           board_ineqs[2 ** tile_id] = [cells, count, count, bin(cells).count('1')]
 
-    # for _ in board_ineqs.items(): print(_)
     for tile in self.revealed:
-      ineq = board_ineqs.pop(tile, None)
+      ineq = board_ineqs.pop(2 ** tile, None)
       if ineq is not None:
         self.add_ineq(ineq, ineqs, index)
 
     if self.verbose:
       print('starting ineqs:')
       for num, bounds in ineqs.items():
-        print(f'  {binary_to_cells(num)}: min {bounds[0]}, max {bounds[1]}, count {bounds[2]}')
+        print(f'  {binary_to_cells(num)} {bounds}')
 
     max_steps = -100
     finished = False
@@ -222,6 +221,8 @@ class Puzzle(object):
       trivial = []
       exact = []
       inexact = []
+      if self.verbose:
+        print('num ineqs:', len(ineqs))
 
       for num, bounds in ineqs.items():
         if bounds[1] == 0 or bounds[0] == bounds[2]:
@@ -240,7 +241,6 @@ class Puzzle(object):
           bounds = ineqs.get(num)
           if self.verbose:
             print('trivial:', binary_to_cells(num), bounds)
-          # if num == 2**21: import ipdb; ipdb.set_trace()
 
           if not num & ~revealed & ~flagged:
             continue
@@ -256,9 +256,7 @@ class Puzzle(object):
                 ineq, added = self.add_ineq(board_ineqs[n], ineqs, index)
 
                 if self.verbose:
-                  print('added, board ineq:', added, n, board_ineqs[n], ineq)
-
-                # import ipdb; ipdb.set_trace()
+                  print('added, n, board ineq:', added, n, binary_to_cells(board_ineqs[n][0]), ineq)
 
               n *= 2
 
@@ -281,7 +279,8 @@ class Puzzle(object):
           left_bounds = ineqs.get(left)
           left_count = bin(left).count('1')
           if self.verbose:
-            print('left exact:', binary_to_cells(left), left_bounds)
+            print(f'left exact: {binary_to_cells(left), left_bounds}')
+            out2 = None
 
           # Skip if too many mines or cells in either
           if left_count > max_cells and left_bounds[0] > max_mines:
@@ -310,15 +309,19 @@ class Puzzle(object):
               overlap_inexact.setdefault(left, set()).add(right)
 
             if self.verbose:
-              print('  right exact:', binary_to_cells(right), right_bounds)
+              out2 = f'\n  right exact: {binary_to_cells(right)} : {right_bounds}'
+              out3 = ''
 
             crossed = self.cross_ineqs(left, left_bounds, right, right_bounds)
             for new_ineq in crossed:
               _, added = self.add_ineq(new_ineq, ineqs, index)
               finished = finished and not added
 
-              if self.verbose:
-                print('    added, crossed exact:', added, binary_to_cells(new_ineq[0]), new_ineq[1:])
+              if self.verbose and added:
+                out3 += f'\n    added, crossed exact: {added}, {binary_to_cells(new_ineq[0]), new_ineq[1:]}'
+
+            if self.verbose and out3:
+              print(out2 + out3)
 
       # Stage: cross exact with inexact
       if finished and exact and overlap_inexact:
