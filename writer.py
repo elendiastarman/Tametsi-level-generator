@@ -3,8 +3,8 @@ import sys
 import datetime
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from TametsiSolver import uncompress
-from TametsiGenerator import smooth_difficulty, measure_branching_factor
+from solver import uncompress
+from generator import smooth_difficulty, measure_branching_factor
 
 env = Environment(
   loader=FileSystemLoader('.'),

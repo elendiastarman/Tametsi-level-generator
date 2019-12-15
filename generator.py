@@ -3,7 +3,7 @@ import random
 import hashlib
 import operator
 
-from TametsiSolver import Puzzle, uncompress
+from solver import Puzzle, uncompress
 
 
 MAX_INEXACT_STAGES = -1
