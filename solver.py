@@ -312,7 +312,7 @@ class Puzzle(object):
             if self.verbose:
               print('  right exact:', binary_to_cells(right), right_bounds)
 
-            crossed = self.cross_ineqs(left, left_count, left_bounds, right, right_count, right_bounds)
+            crossed = self.cross_ineqs(left, left_bounds, right, right_bounds)
             for new_ineq in crossed:
               _, added = self.add_ineq(new_ineq, ineqs, index)
               finished = finished and not added
@@ -334,7 +334,7 @@ class Puzzle(object):
             right_bounds = ineqs.get(right)
             right_count = bin(right).count('1')
 
-            crossed = self.cross_ineqs(left, left_count, left_bounds, right, right_count, right_bounds)
+            crossed = self.cross_ineqs(left, left_bounds, right, right_bounds)
             for new_ineq in crossed:
               _, added = self.add_ineq(new_ineq, ineqs, index)
               finished = finished and not added
@@ -371,7 +371,7 @@ class Puzzle(object):
             if right_bounds[0] == right_bounds[1]:
               continue
 
-            crossed = self.cross_ineqs(left, left_count, left_bounds, right, right_count, right_bounds)
+            crossed = self.cross_ineqs(left, left_bounds, right, right_bounds)
             for new_ineq in crossed:
               _, added = self.add_ineq(new_ineq, ineqs, index)
               finished = finished and not added
