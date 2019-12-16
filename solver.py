@@ -97,8 +97,8 @@ class Puzzle(object):
         groups['fe_se']['fresh'],
         groups['fe_si']['fresh'],
       ]
-      if action == 'remove':
-        self.index_add_remove(groups['fe_se']['stale'], action, num)
+      if action == 'remove' and num in groups['fe_se']['stale']:
+        groups['fe_se']['stale'].remove(num)
 
     else:
       target = [
@@ -106,9 +106,9 @@ class Puzzle(object):
         groups['fi_se']['fresh'],
         groups['fi_si']['fresh'],
       ]
-      if action == 'remove':
-        self.index_add_remove(groups['fe_fi']['inexact'], action, num)
-        self.index_add_remove(groups['fi_si']['stale'], action, num)
+      if action == 'remove' and num in groups['fe_fi']['inexact']:
+        groups['fe_fi']['inexact'].remove(num)
+        groups['fi_si']['stale'].remove(num)
 
     for group in target:
       if action == 'add':
@@ -182,7 +182,7 @@ class Puzzle(object):
 
     return to_add
 
-  def cross_all_pairs(self, lefts, right_index, ineqs, groups, max_cells=9, max_mines=3):
+  def cross_all_pairs(self, lefts, rights, ineqs, groups, max_cells=9, max_mines=3):
     any_added = False
     eliminated = set()
 
@@ -198,14 +198,7 @@ class Puzzle(object):
       if left_bounds[2] > max_cells and left_bounds[0] > max_mines:
         continue
 
-      if right_index:
-        rights = set()
-        n = 1
-        while n <= left:
-          if n & left:
-            rights.update(right_index[n])
-          n *= 2
-      else:
+      if rights is None:
         rights = lefts
 
       added_exact = False
@@ -253,12 +246,12 @@ class Puzzle(object):
     groups = {
       'trivial': set(),
       'fe_fe': set(),
-      'fe_se': {'fresh': set(), 'stale': dict()},
-      'fe_fi': {'exact': set(), 'inexact': dict()},
-      'fe_si': {'fresh': set(), 'stale': dict()},
-      'fi_se': {'fresh': set(), 'stale': dict()},
+      'fe_se': {'fresh': set(), 'stale': set()},
+      'fe_fi': {'exact': set(), 'inexact': set()},
+      'fe_si': {'fresh': set(), 'stale': set()},
+      'fi_se': {'fresh': set(), 'stale': set()},
       'fi_fi': set(),
-      'fi_si': {'fresh': set(), 'stale': dict()},
+      'fi_si': {'fresh': set(), 'stale': set()},
     }
 
     for const in self.constraints:
@@ -389,7 +382,7 @@ class Puzzle(object):
           right_index = value['stale']
 
         if self.verbose:
-          print('stage, num left, num right, time:', name, len(lefts), sum(map(len, right_index.values())) if right_index else len(lefts), '\t', time.time() - start_time)
+          print('stage, num left, num right, time:', name, len(lefts), len(right_index) if right_index else len(lefts), '\t', time.time() - start_time)
 
         lefts_copy = lefts.copy()
 
@@ -397,10 +390,9 @@ class Puzzle(object):
 
         lefts = lefts.difference(eliminated)
         if name == 'fe_fi':
-          value['inexact'] = dict()
+          value['inexact'] = set()
         elif name not in ['fe_fe', 'fi_fi']:
-          for left in eliminated:
-            self.index_add_remove(value['stale'], 'add', left)
+          value['stale'].update(eliminated)
 
         finished = finished and not added
         if added:
