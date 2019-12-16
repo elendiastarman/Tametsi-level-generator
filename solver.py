@@ -84,7 +84,8 @@ class Puzzle(object):
         if action == 'add':
           index.setdefault(n, set()).add(num)
         elif action == 'remove':
-          index.get(n, set()).remove(num)
+          if n in index and num in index[n]:
+            index[n].remove(num)
 
       n *= 2
 
@@ -96,7 +97,8 @@ class Puzzle(object):
         groups['fe_se']['fresh'],
         groups['fe_si']['fresh'],
       ]
-      self.index_add_remove(groups['fe_se']['stale'], action, num)
+      if action == 'remove':
+        self.index_add_remove(groups['fe_se']['stale'], action, num)
 
     else:
       target = [
@@ -104,13 +106,14 @@ class Puzzle(object):
         groups['fi_se']['fresh'],
         groups['fi_si']['fresh'],
       ]
-      self.index_add_remove(groups['fe_fi']['inexact'], action, num)
-      self.index_add_remove(groups['fi_si']['stale'], action, num)
+      if action == 'remove':
+        self.index_add_remove(groups['fe_fi']['inexact'], action, num)
+        self.index_add_remove(groups['fi_si']['stale'], action, num)
 
     for group in target:
       if action == 'add':
         group.add(num)
-      elif action == 'remove':
+      elif action == 'remove' and num in group:
         group.remove(num)
 
   def add_ineq(self, to_add, ineqs, groups):
@@ -140,7 +143,7 @@ class Puzzle(object):
     self.group_add_remove(groups, 'add', num, known[0] == known[1])
     return known, True
 
-  def pop_ineq(self, to_pop, ineqs, index, groups):
+  def pop_ineq(self, to_pop, ineqs, groups):
     known = ineqs.pop(to_pop, None)
 
     if known:
@@ -181,8 +184,11 @@ class Puzzle(object):
 
   def cross_all_pairs(self, lefts, right_index, ineqs, groups, max_cells=9, max_mines=3):
     any_added = False
+    eliminated = set()
 
     for left in lefts:
+      eliminated.add(left)
+
       left_bounds = ineqs.get(left)
       if self.verbose:
         print(f'left: {binary_to_cells(left), left_bounds}')
@@ -202,8 +208,10 @@ class Puzzle(object):
       else:
         rights = lefts
 
+      added_exact = False
+
       for right in rights:
-        if left == right:
+        if left == right or left & right == 0:
           continue
 
         right_bounds = ineqs.get(right)
@@ -218,8 +226,11 @@ class Puzzle(object):
 
         crossed = self.cross_ineqs(left, left_bounds, right, right_bounds)
         for new_ineq in crossed:
-          _, added = self.add_ineq(new_ineq, ineqs, groups)
+          ineq, added = self.add_ineq(new_ineq, ineqs, groups)
           any_added = any_added or added
+
+          if added and ineq[0] == ineq[1]:
+            added_exact = True
 
           if self.verbose and added:
             out3 += f'\n    crossed: {added}, {binary_to_cells(new_ineq[0]), new_ineq[1:]}'
@@ -227,12 +238,17 @@ class Puzzle(object):
         if self.verbose and out3:
           print(out2 + out3)
 
-    return any_added
+      if added_exact:
+        break
+
+    return any_added, eliminated
 
   def solve_fast(self):
     ineqs = dict()
     max_cells = 9
     max_mines = 3
+    import time
+    start_time = time.time()
 
     groups = {
       'trivial': set(),
@@ -372,10 +388,22 @@ class Puzzle(object):
           lefts = value['fresh']
           right_index = value['stale']
 
-        added = self.cross_all_pairs(lefts, right_index, ineqs, groups, max_cells=max_cells, max_mines=max_mines)
+        if self.verbose:
+          print('stage, num left, num right, time:', name, len(lefts), sum(map(len, right_index.values())) if right_index else len(lefts), '\t', time.time() - start_time)
+
+        lefts_copy = lefts.copy()
+
+        added, eliminated = self.cross_all_pairs(lefts_copy, right_index, ineqs, groups, max_cells=max_cells, max_mines=max_mines)
+
+        lefts = lefts.difference(eliminated)
+        if name == 'fe_fi':
+          value['inexact'] = dict()
+        elif name not in ['fe_fe', 'fi_fi']:
+          for left in eliminated:
+            self.index_add_remove(value['stale'], 'add', left)
 
         finished = finished and not added
-        if finished:
+        if added:
           break
 
     print('revealed', binary_to_cells(revealed))
@@ -497,7 +525,7 @@ def demo2():
   print('constraints:')
   pprint.pprint(constraints, width=160)
 
-  print(Puzzle(board, revealed, constraints, verbose=False).solve_fast())
+  print(Puzzle(board, revealed, constraints, verbose=True).solve_fast())
 
 
 def demo3():
@@ -533,7 +561,7 @@ def demo3():
   print('board:', board)
   print('constraints:', constraints)
 
-  print(Puzzle(board, revealed, constraints, verbose=False).solve_fast())
+  print(Puzzle(board, revealed, constraints, verbose=True).solve_fast())
 
 
 if __name__ == "__main__":
