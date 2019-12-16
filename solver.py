@@ -184,11 +184,8 @@ class Puzzle(object):
 
   def cross_all_pairs(self, lefts, rights, ineqs, groups, max_cells=9, max_mines=3):
     any_added = False
-    eliminated = set()
 
     for left in lefts:
-      eliminated.add(left)
-
       left_bounds = ineqs.get(left)
       if self.verbose:
         print(f'left: {binary_to_cells(left), left_bounds}')
@@ -200,8 +197,6 @@ class Puzzle(object):
 
       if rights is None:
         rights = lefts
-
-      added_exact = False
 
       for right in rights:
         if left == right or left & right == 0:
@@ -222,19 +217,13 @@ class Puzzle(object):
           ineq, added = self.add_ineq(new_ineq, ineqs, groups)
           any_added = any_added or added
 
-          if added and ineq[0] == ineq[1]:
-            added_exact = True
-
           if self.verbose and added:
             out3 += f'\n    crossed: {added}, {binary_to_cells(new_ineq[0]), new_ineq[1:]}'
 
         if self.verbose and out3:
           print(out2 + out3)
 
-      if added_exact:
-        break
-
-    return any_added, eliminated
+    return any_added
 
   def solve_fast(self):
     ineqs = dict()
@@ -385,14 +374,14 @@ class Puzzle(object):
           print('stage, num left, num right, time:', name, len(lefts), len(right_index) if right_index else len(lefts), '\t', time.time() - start_time)
 
         lefts_copy = lefts.copy()
+        lefts.clear()
 
-        added, eliminated = self.cross_all_pairs(lefts_copy, right_index, ineqs, groups, max_cells=max_cells, max_mines=max_mines)
+        added = self.cross_all_pairs(lefts_copy, right_index, ineqs, groups, max_cells=max_cells, max_mines=max_mines)
 
-        lefts = lefts.difference(eliminated)
         if name == 'fe_fi':
           value['inexact'] = set()
         elif name not in ['fe_fe', 'fi_fi']:
-          value['stale'].update(eliminated)
+          value['stale'].update(lefts)
 
         finished = finished and not added
         if added:
