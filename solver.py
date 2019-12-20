@@ -84,48 +84,22 @@ class Puzzle(object):
         if action == 'add':
           index.setdefault(n, set()).add(num)
         elif action == 'remove':
+          # index.setdefault(n, {num}).remove(num)
           if n in index and num in index[n]:
             index[n].remove(num)
 
       n *= 2
 
-  def group_add_remove(self, groups, action, num, exact):
-    if exact:
-      target = [
-        groups['fe_fe'],
-        groups['fe_fi']['exact'],
-        groups['fe_se']['fresh'],
-        groups['fe_si']['fresh'],
-      ]
-      if action == 'remove' and num in groups['fe_se']['stale']:
-        groups['fe_se']['stale'].remove(num)
-
-    else:
-      target = [
-        groups['fi_fi'],
-        groups['fi_se']['fresh'],
-        groups['fi_si']['fresh'],
-      ]
-      if action == 'remove' and num in groups['fe_fi']['inexact']:
-        groups['fe_fi']['inexact'].remove(num)
-        groups['fi_si']['stale'].remove(num)
-
-    for group in target:
-      if action == 'add':
-        group.add(num)
-      elif action == 'remove' and num in group:
-        group.remove(num)
-
-  def add_ineq(self, to_add, ineqs, groups):
+  def add_ineq(self, to_add, ineqs, indexes):
     num = to_add[0]
     known = ineqs.get(num, None)
-    # old = None
+    old = None
 
     if known:
       if known[0] >= to_add[1] and known[1] <= to_add[2]:
         return known, False
 
-      # old = known[:]
+      old = known[:]
       new_min = max([known[0], to_add[1]])
       new_max = min([known[1], to_add[2]])
       known[0] = new_min
@@ -134,22 +108,22 @@ class Puzzle(object):
     else:
       known = ineqs[num] = to_add[1:]
 
-    # if old:
-    #   self.group_add_remove(groups, 'remove', num, old[0] == old[1])
+    if old:
+      self.index_add_remove(indexes['exact' if old[0] == old[1] else 'inexact'], 'remove', num)
 
     if known[1] == 0 or known[0] == known[2]:
-      groups['trivial'].add(num)
+      indexes['trivial'].add(num)
     else:
-      groups['fe_fe' if known[0] == known[1] else 'fi_fi'].add(num)
+      self.index_add_remove(indexes['exact' if known[0] == known[1] else 'inexact'], 'add', num)
 
-    # self.group_add_remove(groups, 'add', num, known[0] == known[1])
     return known, True
 
-  def pop_ineq(self, to_pop, ineqs, groups):
+  def pop_ineq(self, to_pop, ineqs, indexes):
     known = ineqs.pop(to_pop, None)
 
     if known:
-      self.group_add_remove(groups, 'remove', to_pop, known[0] == known[1])
+      self.index_add_remove(indexes['stale'], 'remove', to_pop)
+      self.index_add_remove(indexes['exact' if known[0] == known[1] else 'inexact'], 'remove', to_pop)
 
     return known
 
@@ -184,32 +158,43 @@ class Puzzle(object):
 
     return to_add
 
-  def cross_all_pairs(self, left_ineqs, right_ineqs, ineqs, groups):
+  def cross_all_pairs(self, left_index, right_index, ineqs, indexes, max_cells=9, max_mines=3):
     any_added = False
+    num = 1
+    seen = 0
 
-    for left, left_bounds in left_ineqs:
-      if self.verbose:
-        print(f'left: {binary_to_cells(left), left_bounds}')
-        out2 = None
+    while num <= max(left_index):
+      if num not in left_index or num not in right_index:
+        seen = seen | num
+        num *= 2
+        continue
 
-      for right, right_bounds in right_ineqs:
-        if left == right or left & right == 0:
+      lefts = left_index[num]
+      rights = right_index[num]
+
+      for left in lefts.copy():
+        if left & ~seen == 0:
           continue
 
-        if self.verbose:
-          out2 = f'\n  right: {binary_to_cells(right)} : {right_bounds}'
-          out3 = ''
+        left_bounds = ineqs[left]
+        if left_bounds[2] > max_cells or left_bounds[0] > max_mines:
+          continue
 
-        crossed = self.cross_ineqs(left, left_bounds, right, right_bounds)
-        for new_ineq in crossed:
-          ineq, added = self.add_ineq(new_ineq, ineqs, groups)
-          any_added = any_added or added
+        for right in rights.copy():
+          if right ^ ~seen == 0 or left == right:
+            continue
 
-          if self.verbose and added:
-            out3 += f'\n    crossed: {added}, {binary_to_cells(new_ineq[0]), new_ineq[1:]}'
+          right_bounds = ineqs[right]
+          if right_bounds[2] > max_cells or right_bounds[0] > max_mines:
+            continue
 
-        if self.verbose and out3:
-          print(out2 + out3)
+          crossed = self.cross_ineqs(left, left_bounds, right, right_bounds)
+          for new_ineq in crossed:
+            ineq, added = self.add_ineq(new_ineq, ineqs, indexes)
+            any_added = any_added or added
+
+      seen = seen | num
+      num *= 2
 
     return any_added
 
@@ -217,22 +202,18 @@ class Puzzle(object):
     ineqs = dict()
     max_cells = 9
     max_mines = 3
-    import time
-    start_time = time.time()
+    # import time
+    # start_time = time.time()
 
-    groups = {
+    indexes = {
       'trivial': set(),
-      'fe_fe': set(),
-      'fe_se': {'fresh': set(), 'stale': set()},
-      'fe_fi': set(),
-      'fe_si': set(),
-      'fi_se': None,
-      'fi_fi': set(),
-      'fi_si': {'fresh': set(), 'stale': set()},
+      'exact': dict(),
+      'inexact': dict(),
+      'stale': dict(),
     }
 
     for const in self.constraints:
-      self.add_ineq(const, ineqs, groups)
+      self.add_ineq(const, ineqs, indexes)
 
     revealed = cells_to_binary(self.revealed)
     flagged = 0
@@ -254,7 +235,7 @@ class Puzzle(object):
     for tile in self.revealed:
       ineq = board_ineqs.pop(2 ** tile, None)
       if ineq is not None:
-        self.add_ineq(ineq, ineqs, groups)
+        self.add_ineq(ineq, ineqs, indexes)
 
     if self.verbose:
       print('starting ineqs:')
@@ -288,12 +269,12 @@ class Puzzle(object):
 
           to_add.append([new_num, new_min, new_max, new_count])
 
-      # for old_num in to_remove:
-      #   self.pop_ineq(old_num, ineqs, groups)
+      for old_num in set(to_remove):
+        self.pop_ineq(old_num, ineqs, indexes)
       to_remove = set(to_remove)
 
       for new_ineq in to_add:
-        _, added = self.add_ineq(new_ineq, ineqs, groups)
+        _, added = self.add_ineq(new_ineq, ineqs, indexes)
         finished = finished and not added
 
       if not ineqs:
@@ -303,11 +284,11 @@ class Puzzle(object):
         print('num ineqs:', len(ineqs))
 
       # Stage: use trivial
-      if groups['trivial']:
+      if indexes['trivial']:
         newly_revealed = 0
         newly_flagged = 0
 
-        for num in groups['trivial']:
+        for num in indexes['trivial']:
           bounds = ineqs.get(num)
           if self.verbose:
             print('trivial:', binary_to_cells(num), bounds)
@@ -323,7 +304,7 @@ class Puzzle(object):
             n = 1
             while n <= new_clear:
               if n & new_clear and n in board_ineqs:
-                ineq, added = self.add_ineq(board_ineqs[n], ineqs, groups)
+                ineq, added = self.add_ineq(board_ineqs[n], ineqs, indexes)
 
                 if self.verbose:
                   print('added, n, board ineq:', added, n, binary_to_cells(board_ineqs[n][0]), ineq)
@@ -339,109 +320,38 @@ class Puzzle(object):
           print('newly_revealed:', binary_to_cells(newly_revealed))
           print('newly_flagged:', binary_to_cells(newly_flagged))
 
-        groups['trivial'] = set()
+        indexes['trivial'] = set()
         finished = False
         continue
 
-      for name, value in groups.items():
-        if name == 'trivial':
-          continue
-
-        if name == 'fe_fe':
-          lefts = rights = value
-
-        elif name == 'fe_se':
-          lefts, rights = value['fresh'], value['stale']
-
-        elif name == 'fe_fi':
-          lefts, rights = value, groups['fi_fi'].copy()
-
-        elif name == 'fe_si':
-          lefts, rights = value, groups['fi_si']['stale']
-
-        elif name == 'fi_se':
-          lefts, rights = groups['fi_fi'].copy(), groups['fe_se']['stale']
-
-        elif name == 'fi_fi':
-          lefts = rights = value
-
-        elif name == 'fi_si':
-          lefts, rights = value['fresh'], value['stale']
-
-        left_ineqs = []
-        left_misplaced = set()
-        right_ineqs = []
-        right_misplaced = set()
-
-        for left in lefts:
-          ineq = ineqs.get(left)
-
-          if ineq[1] == 0 or ineq[0] == ineq[2]:  # trivial
-            left_misplaced.add(left)
-            continue
-
-          if name in ['fe_fi', 'fe_si'] and ineq[0] != ineq[1] or name == 'fi_se' and ineq[0] == ineq[1]:
-            left_misplaced.add(left)
-            right_ineqs.append([left, ineq])
-
-          elif ineq[1] <= max_mines and ineq[2] <= max_cells:
-            left_ineqs.append([left, ineq])
-
-        for right in rights:
-          ineq = ineqs.get(right)
-
-          if ineq[1] == 0 or ineq[0] == ineq[2]:  # trivial
-            right_misplaced.add(right)
-            continue
-
-          if name in ['fe_fi', 'fe_si'] and ineq[0] == ineq[1] or name == 'fi_se' and ineq[0] != ineq[1]:
-            right_misplaced.add(right)
-            left_ineqs.append([right, ineq])
-
-          elif ineq[1] <= max_mines and ineq[2] <= max_cells:
-            right_ineqs.append([right, ineq])
-
-        if left_misplaced or right_misplaced:
-          lefts.difference_update(left_misplaced)
-          lefts.update(right_misplaced)
-          rights.difference_update(right_misplaced)
-          rights.update(left_misplaced)
-
-        if name == 'fe_fe':
-          groups['fe_fe'] = set()
-          groups['fe_se']['fresh'].update(lefts)
-
-        elif name == 'fe_se':
-          value['fresh'] = set()
-          value['stale'].update(lefts)
-          groups['fe_fi'].update(lefts)
-
-        elif name == 'fe_fi':
-          groups['fe_fi'] = set()
-          groups['fe_si'].update(lefts)
-
-        elif name == 'fe_si':
-          groups['fe_si'] = set()
-
-        elif name == 'fi_se':
-          pass
-
-        elif name == 'fi_fi':
-          groups['fi_fi'] = set()
-          groups['fi_si']['fresh'].update(lefts)
-
-        elif name == 'fi_si':
-          value['fresh'] = set()
-          value['stale'].update(lefts)
-
+      if indexes['exact']:
         if self.verbose:
-          print('stage, num left, num right, time:', name, len(lefts), len(rights), '\t', time.time() - start_time)
+          print('num exact:', sum(map(len, indexes['exact'].values())))
 
-        added = self.cross_all_pairs(left_ineqs, right_ineqs, ineqs, groups)
+        added = self.cross_all_pairs(indexes['exact'], indexes['exact'], ineqs, indexes, max_cells, max_mines)
+        added = added | self.cross_all_pairs(indexes['exact'], indexes['inexact'], ineqs, indexes, max_cells, max_mines)
+        added = added | self.cross_all_pairs(indexes['exact'], indexes['stale'], ineqs, indexes, max_cells, max_mines)
+
+        for bit, nums in indexes['exact'].items():
+          indexes['stale'].setdefault(bit, set()).update(nums)
+        indexes['exact'] = dict()
 
         finished = finished and not added
         if added:
-          break
+          continue
+
+      if indexes['inexact']:
+        if self.verbose:
+          print('num inexact:', sum(map(len, indexes['inexact'].values())))
+
+        added = self.cross_all_pairs(indexes['inexact'], indexes['inexact'], ineqs, indexes, max_cells, max_mines)
+        added = added | self.cross_all_pairs(indexes['inexact'], indexes['stale'], ineqs, indexes, max_cells, max_mines)
+
+        for bit, nums in indexes['inexact'].items():
+          indexes['stale'].setdefault(bit, set()).update(nums)
+        indexes['inexact'] = dict()
+
+        finished = finished and not added
 
     print('revealed', binary_to_cells(revealed))
     print('flagged', binary_to_cells(flagged))
