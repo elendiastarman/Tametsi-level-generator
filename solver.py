@@ -94,6 +94,8 @@ class Puzzle(object):
     num = to_add[0]
     known = ineqs.get(num, None)
     old = None
+    # if num == cells_to_binary({14, 16, 26, 28}):
+    #   import ipdb; ipdb.set_trace()
 
     if known:
       if known[0] >= to_add[1] and known[1] <= to_add[2]:
@@ -108,14 +110,18 @@ class Puzzle(object):
     else:
       known = ineqs[num] = to_add[1:]
 
-    if old:
-      self.index_add_remove(indexes['exact' if old[0] == old[1] else 'inexact'], 'remove', num)
-
     if known[1] == 0 or known[0] == known[2]:
       indexes['trivial'].add(num)
-    else:
-      self.index_add_remove(indexes['exact' if known[0] == known[1] else 'inexact'], 'add', num)
+      return known, True
 
+    known_exact = known[0] == known[1]
+
+    if old:
+      old_exact = old[0] == old[1]
+      if old_exact ^ known_exact:
+        self.index_add_remove(indexes['exact' if old[0] == old[1] else 'inexact'], 'remove', num)
+
+    self.index_add_remove(indexes['exact' if known_exact else 'inexact'], 'add', num)
     return known, True
 
   def pop_ineq(self, to_pop, ineqs, indexes):
@@ -170,28 +176,31 @@ class Puzzle(object):
         continue
 
       lefts = left_index[num]
-      rights = right_index[num]
+      rights = right_index[num].copy()
 
-      for left in lefts.copy():
-        if left & ~seen == 0:
+      for left in lefts:
+        left_bounds = ineqs.get(left, None)
+        if left == cells_to_binary({14, 16, 26, 28}):
+          print(' left:', left_bounds)
+        if left_bounds is None or left_bounds[2] > max_cells and left_bounds[0] > max_mines:
           continue
 
-        left_bounds = ineqs[left]
-        if left_bounds[2] > max_cells or left_bounds[0] > max_mines:
-          continue
-
-        for right in rights.copy():
-          if right ^ ~seen == 0 or left == right:
+        for right in rights:
+          if left == right or left & seen and right & seen:
             continue
 
-          right_bounds = ineqs[right]
-          if right_bounds[2] > max_cells or right_bounds[0] > max_mines:
+          right_bounds = ineqs.get(right, None)
+          if left == cells_to_binary({14, 16, 26, 28}):
+            print('  right:', binary_to_cells(right), right_bounds)
+          if right_bounds is None or right_bounds[2] > max_cells and right_bounds[0] > max_mines:
             continue
 
           crossed = self.cross_ineqs(left, left_bounds, right, right_bounds)
           for new_ineq in crossed:
             ineq, added = self.add_ineq(new_ineq, ineqs, indexes)
-            any_added = any_added or added
+            if left == cells_to_binary({14, 16, 26, 28}):
+              print('  new:', binary_to_cells(new_ineq[0]), new_ineq[1:])
+            any_added = added or any_added
 
       seen = seen | num
       num *= 2
@@ -202,8 +211,6 @@ class Puzzle(object):
     ineqs = dict()
     max_cells = 9
     max_mines = 3
-    # import time
-    # start_time = time.time()
 
     indexes = {
       'trivial': set(),
@@ -242,6 +249,7 @@ class Puzzle(object):
       for num, bounds in ineqs.items():
         print(f'  {binary_to_cells(num)} {bounds}')
 
+    # import ipdb; ipdb.set_trace()
     max_steps = -100
     finished = False
 
@@ -257,6 +265,7 @@ class Puzzle(object):
         # if any cells were revealed or flagged, make a new inequality
         if num & (revealed | flagged):
           to_remove.append(num)
+          if num & 2**14: print(' removing', binary_to_cells(num), bounds)
 
           new_num = num & ~revealed & ~flagged
           if not new_num:
@@ -268,10 +277,10 @@ class Puzzle(object):
           new_max = min([new_count, max([0, bounds[1] - flagged_count])])
 
           to_add.append([new_num, new_min, new_max, new_count])
+          if num & 2**14: print(' adding', binary_to_cells(new_num), [new_min, new_max, new_count])
 
-      for old_num in set(to_remove):
+      for old_num in to_remove:
         self.pop_ineq(old_num, ineqs, indexes)
-      to_remove = set(to_remove)
 
       for new_ineq in to_add:
         _, added = self.add_ineq(new_ineq, ineqs, indexes)
@@ -288,8 +297,14 @@ class Puzzle(object):
         newly_revealed = 0
         newly_flagged = 0
 
-        for num in indexes['trivial']:
-          bounds = ineqs.get(num)
+        trivial = indexes['trivial']
+        indexes['trivial'] = set()
+
+        for num in trivial:
+          if num not in ineqs:  # rare but okay
+            continue
+
+          bounds = ineqs[num]
           if self.verbose:
             print('trivial:', binary_to_cells(num), bounds)
 
@@ -297,19 +312,9 @@ class Puzzle(object):
             continue
 
           if bounds[1] == 0:  # revealed
-            new_clear = num & ~revealed
-            newly_revealed = newly_revealed | new_clear
-            revealed = revealed | new_clear
-
-            n = 1
-            while n <= new_clear:
-              if n & new_clear and n in board_ineqs:
-                ineq, added = self.add_ineq(board_ineqs[n], ineqs, indexes)
-
-                if self.verbose:
-                  print('added, n, board ineq:', added, n, binary_to_cells(board_ineqs[n][0]), ineq)
-
-              n *= 2
+            new_reveal = num & ~revealed
+            newly_revealed = newly_revealed | new_reveal
+            revealed = revealed | new_reveal
 
           else:
             new_flag = num & ~flagged
@@ -320,41 +325,71 @@ class Puzzle(object):
           print('newly_revealed:', binary_to_cells(newly_revealed))
           print('newly_flagged:', binary_to_cells(newly_flagged))
 
-        indexes['trivial'] = set()
+        n = 1
+        while n <= newly_revealed | newly_flagged:
+          if n & (newly_revealed | newly_flagged):
+            indexes['exact'].pop(n, None)
+            indexes['inexact'].pop(n, None)
+            indexes['stale'].pop(n, None)
+
+          if n & newly_revealed and n in board_ineqs:
+            ineq, added = self.add_ineq(board_ineqs[n], ineqs, indexes)
+
+            if self.verbose:
+              print('added, n, board ineq:', added, n, binary_to_cells(board_ineqs[n][0]), ineq)
+
+          n *= 2
+
         finished = False
         continue
 
       if indexes['exact']:
-        if self.verbose:
-          print('num exact:', sum(map(len, indexes['exact'].values())))
-
-        added = self.cross_all_pairs(indexes['exact'], indexes['exact'], ineqs, indexes, max_cells, max_mines)
-        added = added | self.cross_all_pairs(indexes['exact'], indexes['inexact'], ineqs, indexes, max_cells, max_mines)
-        added = added | self.cross_all_pairs(indexes['exact'], indexes['stale'], ineqs, indexes, max_cells, max_mines)
-
-        for bit, nums in indexes['exact'].items():
-          indexes['stale'].setdefault(bit, set()).update(nums)
+        exact = indexes['exact']
         indexes['exact'] = dict()
+        if self.verbose:
+          print('num exact:', sum(map(len, exact.values())))
+
+        # import ipdb; ipdb.set_trace()
+        added = self.cross_all_pairs(exact, exact, ineqs, indexes, max_cells, max_mines)
+        added = self.cross_all_pairs(exact, indexes['inexact'], ineqs, indexes, max_cells, max_mines) or added
+        added = self.cross_all_pairs(exact, indexes['stale'], ineqs, indexes, max_cells, max_mines) or added
+
+        for bit, nums in exact.items():
+          indexes['stale'].setdefault(bit, set()).update(nums)
 
         finished = finished and not added
         if added:
           continue
 
       if indexes['inexact']:
-        if self.verbose:
-          print('num inexact:', sum(map(len, indexes['inexact'].values())))
-
-        added = self.cross_all_pairs(indexes['inexact'], indexes['inexact'], ineqs, indexes, max_cells, max_mines)
-        added = added | self.cross_all_pairs(indexes['inexact'], indexes['stale'], ineqs, indexes, max_cells, max_mines)
-
-        for bit, nums in indexes['inexact'].items():
-          indexes['stale'].setdefault(bit, set()).update(nums)
+        inexact = indexes['inexact']
         indexes['inexact'] = dict()
+        if self.verbose:
+          print('num inexact:', sum(map(len, inexact.values())))
 
+        added = self.cross_all_pairs(inexact, inexact, ineqs, indexes, max_cells, max_mines)
+        added = self.cross_all_pairs(inexact, indexes['stale'], ineqs, indexes, max_cells, max_mines) or added
+
+        for bit, nums in inexact.items():
+          indexes['stale'].setdefault(bit, set()).update(nums)
+
+        finished = finished and not added
+        if added:
+          continue
+
+      if indexes['stale']:
+        if self.verbose:
+          print('num stale:', sum(map(len, indexes['stale'].values())))
+
+        added = self.cross_all_pairs(indexes['stale'], indexes['stale'], ineqs, indexes, max_cells, max_mines)
         finished = finished and not added
 
     print('revealed', binary_to_cells(revealed))
     print('flagged', binary_to_cells(flagged))
+
+    if ineqs:
+      for num, bounds in ineqs.items():
+        print('  ', binary_to_cells(num), bounds)
 
     return bool(ineqs)
 
@@ -427,7 +462,7 @@ def uncompress(width, height, compressed):
 def demo2():
   # Combination Lock levels
 
-  level = 6
+  level = 2
 
   if level == 1:
     # Combination Lock I
