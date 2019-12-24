@@ -84,7 +84,6 @@ class Puzzle(object):
         if action == 'add':
           index.setdefault(n, set()).add(num)
         elif action == 'remove':
-          # index.setdefault(n, {num}).remove(num)
           if n in index and num in index[n]:
             index[n].remove(num)
 
@@ -94,8 +93,6 @@ class Puzzle(object):
     num = to_add[0]
     known = ineqs.get(num, None)
     old = None
-    # if num == cells_to_binary({14, 16, 26, 28}):
-    #   import ipdb; ipdb.set_trace()
 
     if known:
       if known[0] >= to_add[1] and known[1] <= to_add[2]:
@@ -180,8 +177,6 @@ class Puzzle(object):
 
       for left in lefts:
         left_bounds = ineqs.get(left, None)
-        if left == cells_to_binary({14, 16, 26, 28}):
-          print(' left:', left_bounds)
         if left_bounds is None or left_bounds[2] > max_cells and left_bounds[0] > max_mines:
           continue
 
@@ -190,16 +185,12 @@ class Puzzle(object):
             continue
 
           right_bounds = ineqs.get(right, None)
-          if left == cells_to_binary({14, 16, 26, 28}):
-            print('  right:', binary_to_cells(right), right_bounds)
           if right_bounds is None or right_bounds[2] > max_cells and right_bounds[0] > max_mines:
             continue
 
           crossed = self.cross_ineqs(left, left_bounds, right, right_bounds)
           for new_ineq in crossed:
             ineq, added = self.add_ineq(new_ineq, ineqs, indexes)
-            if left == cells_to_binary({14, 16, 26, 28}):
-              print('  new:', binary_to_cells(new_ineq[0]), new_ineq[1:])
             any_added = added or any_added
 
       seen = seen | num
@@ -265,7 +256,6 @@ class Puzzle(object):
         # if any cells were revealed or flagged, make a new inequality
         if num & (revealed | flagged):
           to_remove.append(num)
-          if num & 2**14: print(' removing', binary_to_cells(num), bounds)
 
           new_num = num & ~revealed & ~flagged
           if not new_num:
@@ -277,7 +267,6 @@ class Puzzle(object):
           new_max = min([new_count, max([0, bounds[1] - flagged_count])])
 
           to_add.append([new_num, new_min, new_max, new_count])
-          if num & 2**14: print(' adding', binary_to_cells(new_num), [new_min, new_max, new_count])
 
       for old_num in to_remove:
         self.pop_ineq(old_num, ineqs, indexes)
@@ -326,8 +315,9 @@ class Puzzle(object):
           print('newly_flagged:', binary_to_cells(newly_flagged))
 
         n = 1
-        while n <= newly_revealed | newly_flagged:
-          if n & (newly_revealed | newly_flagged):
+        newly_changed = newly_revealed | newly_flagged
+        while n <= newly_changed:
+          if n & newly_changed:
             indexes['exact'].pop(n, None)
             indexes['inexact'].pop(n, None)
             indexes['stale'].pop(n, None)
@@ -349,7 +339,6 @@ class Puzzle(object):
         if self.verbose:
           print('num exact:', sum(map(len, exact.values())))
 
-        # import ipdb; ipdb.set_trace()
         added = self.cross_all_pairs(exact, exact, ineqs, indexes, max_cells, max_mines)
         added = self.cross_all_pairs(exact, indexes['inexact'], ineqs, indexes, max_cells, max_mines) or added
         added = self.cross_all_pairs(exact, indexes['stale'], ineqs, indexes, max_cells, max_mines) or added
@@ -373,15 +362,6 @@ class Puzzle(object):
         for bit, nums in inexact.items():
           indexes['stale'].setdefault(bit, set()).update(nums)
 
-        finished = finished and not added
-        if added:
-          continue
-
-      if indexes['stale']:
-        if self.verbose:
-          print('num stale:', sum(map(len, indexes['stale'].values())))
-
-        added = self.cross_all_pairs(indexes['stale'], indexes['stale'], ineqs, indexes, max_cells, max_mines)
         finished = finished and not added
 
     print('revealed', binary_to_cells(revealed))
@@ -462,7 +442,7 @@ def uncompress(width, height, compressed):
 def demo2():
   # Combination Lock levels
 
-  level = 2
+  level = 6
 
   if level == 1:
     # Combination Lock I
@@ -507,7 +487,7 @@ def demo2():
   print('constraints:')
   pprint.pprint(constraints, width=160)
 
-  print(Puzzle(board, revealed, constraints, verbose=True).solve_fast())
+  print(Puzzle(board, revealed, constraints, verbose=False).solve_fast())
 
 
 def demo3():
