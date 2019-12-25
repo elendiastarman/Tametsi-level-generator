@@ -90,6 +90,9 @@ class Puzzle(object):
       n *= 2
 
   def add_ineq(self, to_add, ineqs, indexes):
+    if to_add[1] == 0 and to_add[2] == to_add[3]:  # Number of mines in X cells is [0, X]
+      return None, False
+
     num = to_add[0]
     known = ineqs.get(num, None)
     old = None
@@ -166,6 +169,9 @@ class Puzzle(object):
     num = 1
     seen = 0
 
+    if self.verbose:
+      print()
+
     while num <= max(left_index):
       if num not in left_index or num not in right_index:
         seen = seen | num
@@ -180,25 +186,43 @@ class Puzzle(object):
         if left_bounds is None or left_bounds[2] > max_cells and left_bounds[0] > max_mines:
           continue
 
+        if self.verbose:
+          leftstr = f'{binary_to_cells(left)} {left_bounds}'
+
         for right in rights:
-          if left == right or left & seen and right & seen:
+          if left == right or (left & right) & seen:
             continue
 
           right_bounds = ineqs.get(right, None)
           if right_bounds is None or right_bounds[2] > max_cells and right_bounds[0] > max_mines:
             continue
 
+          if self.verbose:
+            rightstr = f'{binary_to_cells(right)} {right_bounds}'
+
           crossed = self.cross_ineqs(left, left_bounds, right, right_bounds)
           for new_ineq in crossed:
             ineq, added = self.add_ineq(new_ineq, ineqs, indexes)
             any_added = added or any_added
 
+            if self.verbose:
+              if leftstr:
+                print('left', leftstr)
+                leftstr = ''
+              if rightstr:
+                print('  right', rightstr)
+                rightstr = ''
+              print('  ', '+' if added else '_', binary_to_cells(new_ineq[0]), new_ineq[1:])
+
       seen = seen | num
       num *= 2
 
+    if self.verbose:
+      print()
+
     return any_added
 
-  def solve_fast(self):
+  def solve(self):
     ineqs = dict()
     max_cells = 9
     max_mines = 3
@@ -364,14 +388,21 @@ class Puzzle(object):
 
         finished = finished and not added
 
-    print('revealed', binary_to_cells(revealed))
-    print('flagged', binary_to_cells(flagged))
+    if self.verbose:
+      print('revealed', binary_to_cells(revealed))
+      print('flagged', binary_to_cells(flagged))
 
-    if ineqs:
+    if ineqs and self.verbose:
       for num, bounds in ineqs.items():
         print('  ', binary_to_cells(num), bounds)
 
-    return bool(ineqs)
+    result = dict(
+      solved=not bool(ineqs),
+      revealed=binary_to_cells(revealed),
+      flagged=binary_to_cells(flagged),
+    )
+
+    return result
 
 
 def demo1():
@@ -395,7 +426,7 @@ def demo1():
   print('board:', board)
   print('constraints:', constraints)
 
-  print(Puzzle(board, revealed, constraints, verbose=True).solve_fast())
+  print(Puzzle(board, revealed, constraints, verbose=True).solve())
 
 
 def uncompress(width, height, compressed):
@@ -487,7 +518,7 @@ def demo2():
   print('constraints:')
   pprint.pprint(constraints, width=160)
 
-  print(Puzzle(board, revealed, constraints, verbose=False).solve_fast())
+  print(Puzzle(board, revealed, constraints, verbose=False).solve())
 
 
 def demo3():
@@ -523,7 +554,7 @@ def demo3():
   print('board:', board)
   print('constraints:', constraints)
 
-  print(Puzzle(board, revealed, constraints, verbose=True).solve_fast())
+  print(Puzzle(board, revealed, constraints, verbose=True).solve())
 
 
 if __name__ == "__main__":
