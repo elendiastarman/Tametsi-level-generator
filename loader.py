@@ -9,7 +9,7 @@ def load(contents, verbose=False):
   initial_revealed = []
 
   # Not parsing arbitrary XML here!
-  matches = re.finditer('<NODE>.*?</NODE>', contents)
+  matches = re.finditer('<NODE>.*?</NODE>', contents, re.DOTALL)
   for match in matches:
     node = match.group(0)
 
@@ -55,7 +55,7 @@ def load(contents, verbose=False):
   constraints.append([total_mines, list(range(len(nodes)))])
   gray_mines = [total_mines, set(range(len(nodes)))]
 
-  hints = re.finditer('<(COLUMN_)?HINT>.*?</(COLUMN_)?HINT>', contents)
+  hints = re.finditer('<(COLUMN_)?HINT>.*?</(COLUMN_)?HINT>', contents, re.DOTALL)
   for hint in hints:
     mapped_ids = []
     mine_count = 0
@@ -83,5 +83,6 @@ def load(contents, verbose=False):
     for constraint in constraints:
       print(' ', constraint)
 
+  name = re.search('<TITLE>(.+?)</TITLE>', contents).group(1)
   reverse_id_map = [node['node_id'] for node in nodes]
-  return Puzzle(board, revealed, constraints, verbose=verbose), reverse_id_map
+  return Puzzle(board, revealed, constraints, verbose=verbose), name, reverse_id_map

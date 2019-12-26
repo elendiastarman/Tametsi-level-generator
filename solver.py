@@ -264,12 +264,10 @@ class Puzzle(object):
       for num, bounds in ineqs.items():
         print(f'  {binary_to_cells(num)} {bounds}')
 
-    # import ipdb; ipdb.set_trace()
-    max_steps = -100
     finished = False
+    summary = []
 
-    while max_steps and not finished:
-      max_steps -= 1
+    while not finished:
       finished = True
 
       # Stage: adjust
@@ -302,8 +300,9 @@ class Puzzle(object):
       if not ineqs:
         break
 
+      summary.append(dict(num_ineqs=len(ineqs)))
       if self.verbose:
-        print('num ineqs:', len(ineqs))
+        print('num ineqs:', summary[-1]['num_ineqs'])
 
       # Stage: use trivial
       if indexes['trivial']:
@@ -334,9 +333,10 @@ class Puzzle(object):
             newly_flagged = newly_flagged | new_flag
             flagged = flagged | new_flag
 
+        summary[-1]['trivial'] = dict(revealed=binary_to_cells(newly_revealed), flagged=binary_to_cells(newly_flagged))
         if self.verbose:
-          print('newly_revealed:', binary_to_cells(newly_revealed))
-          print('newly_flagged:', binary_to_cells(newly_flagged))
+          print('newly_revealed:', summary[-1]['trivial']['revealed'])
+          print('newly_flagged:', summary[-1]['trivial']['flagged'])
 
         n = 1
         newly_changed = newly_revealed | newly_flagged
@@ -360,8 +360,10 @@ class Puzzle(object):
       if indexes['exact']:
         exact = indexes['exact']
         indexes['exact'] = dict()
+
+        summary[-1]['exact'] = dict(count=len(set.union(*exact.values())))
         if self.verbose:
-          print('num exact:', sum(map(len, exact.values())))
+          print('num exact:', summary[-1]['exact']['count'])
 
         added = self.cross_all_pairs(exact, exact, ineqs, indexes, max_cells, max_mines)
         added = self.cross_all_pairs(exact, indexes['inexact'], ineqs, indexes, max_cells, max_mines) or added
@@ -377,8 +379,10 @@ class Puzzle(object):
       if indexes['inexact']:
         inexact = indexes['inexact']
         indexes['inexact'] = dict()
+
+        summary[-1]['inexact'] = dict(count=len(set.union(*exact.values())))
         if self.verbose:
-          print('num inexact:', sum(map(len, inexact.values())))
+          print('num inexact:', summary[-1]['inexact']['count'])
 
         added = self.cross_all_pairs(inexact, inexact, ineqs, indexes, max_cells, max_mines)
         added = self.cross_all_pairs(inexact, indexes['stale'], ineqs, indexes, max_cells, max_mines) or added
@@ -400,6 +404,7 @@ class Puzzle(object):
       solved=not bool(ineqs),
       revealed=binary_to_cells(revealed),
       flagged=binary_to_cells(flagged),
+      summary=summary,
     )
 
     return result

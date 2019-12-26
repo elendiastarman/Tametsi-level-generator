@@ -6,36 +6,39 @@ from scorer import score
 
 
 def run(level_id=None, verbose=False):
-  names = []
+  filenames = []
 
   with open('test/index') as index:
     for line in index.read().split('\n'):
       id, name = line.split(' ')
-      names.append(name)
+      filenames.append(name)
 
       if level_id and id == level_id:
-        names = [name]
+        filenames = [name]
         break
 
-  print('names:', names)
-  for index, name in enumerate(names):
-    with open(f'test/{name}') as level:
-      puzzle, reverse_id_map = load(level.read(), verbose=verbose)
+  print('filenames:', filenames)
+  for index, filename in enumerate(filenames):
+    with open(f'test/{filename}') as level:
+      puzzle, name, reverse_id_map = load(level.read(), verbose=verbose)
 
     st = time.time()
     result = puzzle.solve()
     et = time.time()
-    print(f'{index + 1} {name}: {et - st:.3f} seconds, solved {result["solved"]}')
+
+    if verbose:
+      print('result:', result)
+      print('')
+      for step in result['summary']:
+        print(' ', step)
 
     if verbose and not result['solved']:
-      print('result:', result)
       flagged = ','.join([reverse_id_map[cell_id] for cell_id in result['flagged']])
       revealed = ','.join([reverse_id_map[cell_id] for cell_id in result['revealed']])
       print(f'P:_:{flagged}:{revealed}:n')
 
-    continue
-    scored = score(result)
-    print(f'{index + 1} {name}: {et - st:.3f} seconds, score {scored}')
+    scored = score(result, 'seqnum')
+    print(f'{index + 1:3} {filename:20}: {et - st:.3f} seconds, solved {result["solved"]}, score {scored:.3f} - {name}')
 
 
 if __name__ == '__main__':
