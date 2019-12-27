@@ -22,10 +22,6 @@ Assumptions/conditions:
 * Revealing a mine means immediate failure.
 """
 
-import sys
-import IPython
-import pprint
-
 
 def cells_to_binary(cells):
   num = 0
@@ -48,6 +44,37 @@ def binary_to_cells(num):
 
 
 class Puzzle(object):
+  """
+  # 53: Squared Square
+  board = [
+    (0, '?', (1, 3, 5, 6)),
+    (1, '?', (0, 2, 3, 4)),
+    (2, '?', (1, 4, 7, 8)),
+    (3, '*', (0, 1, 2, 4, 6, 7, 9, 10)),
+    (4, '.', (1, 2, 3, 7)),
+    (5, '.', (0, 6, 9, 13)),
+    (6, '?', (0, 3, 5, 9)),
+    (7, '.', (2, 3, 4, 8, 10, 11, 12)),
+    (8, '.', (2, 7, 12, 15)),
+    (9, '.', (3, 5, 6, 10, 11, 13, 14)),
+    (10, '?', (3, 7, 9, 11)),
+    (11, '.', (7, 9, 10, 12, 14, 15, 16)),
+    (12, '*', (7, 8, 11, 15)),
+    (13, '*', (5, 9, 14, 16)),
+    (14, '?', (9, 11, 13, 16)),
+    (15, '?', (8, 11, 12, 16)),
+    (16, '.', (11, 13, 14, 15)),
+  ]
+  revealed = [10, 11, 16]
+  constraints = [
+    (1, [0, 2, 13, 15]),  # pink
+    (0, [1, 5, 8, 16]),  # red
+    (1, [3, 7, 9, 11]),  # orange
+    (1, [4, 6, 10, 12, 14]),  # yellow
+    (3, list(range(17))),  # total
+  ]
+  """
+
   def __init__(self, board, revealed, constraints, verbose=False, max_inexact_stages=-1):
     self.board = board
     self.revealed = revealed
@@ -408,179 +435,3 @@ class Puzzle(object):
     )
 
     return result
-
-
-def demo1():
-  # . * . *
-  # ? . . ?
-  board = [
-    (0, '.', (1, 4, 5)),
-    (1, '*', (0, 2, 4, 5, 6)),
-    (2, '.', (1, 3, 5, 6, 7)),
-    (3, '*', (2, 6, 7)),
-    (4, '?', (0, 1, 5)),
-    (5, '.', (0, 1, 2, 4, 6)),
-    (6, '.', (1, 2, 3, 5, 7)),
-    (7, '?', (2, 3, 6)),
-  ]
-  revealed = [0, 5, 7]
-  constraints = [
-    (2, [0, 1, 2, 3, 4, 5, 6, 7]),
-  ]
-
-  print('board:', board)
-  print('constraints:', constraints)
-
-  print(Puzzle(board, revealed, constraints, verbose=True).solve())
-
-
-def uncompress(width, height, compressed):
-  board = []
-
-  for i in range(width * height):
-    neighbors = []
-    board.append((i, compressed[i], neighbors))
-
-    for dx in [-1, 0, 1]:
-      if i % width + dx < 0 or i % width + dx >= width:
-        continue
-
-      for dy in [-1, 0, 1]:
-        if i // width + dy < 0 or i // width + dy >= height:
-          continue
-
-        if [dx, dy] == [0, 0]:
-          continue
-
-        neighbors.append(i + dx + width * dy)
-
-  constraints = [(compressed.count('*'), list(range(width * height)))]
-
-  # vertical column hints
-  for j in range(width):
-    constraints.append((
-      compressed[j::width].count('*'),
-      [j + k * width for k in range(height)],
-    ))
-
-  # horizontal column hints
-  for j in range(height):
-    constraints.append((
-      compressed[j * width:j * width + width].count('*'),
-      list(range(j * width, j * width + width)),
-    ))
-
-  revealed = []
-
-  return board, revealed, constraints
-
-
-def demo2():
-  # Combination Lock levels
-
-  level = 6
-
-  if level == 1:
-    # Combination Lock I
-    # . * . ? . .
-    # . * . ? . .
-    # * . * * * ?
-    # * * . ? . .
-    # * ? * . * .
-    # . . . * . ?
-    compressed = '.*.?...*.?..*.***?**.?..*?*.*....*.?'
-    w, h = 6, 6
-
-  elif level == 2:
-    # Combination Lock II
-    # . * * * . *
-    # . . * * * *
-    # * . * . . *
-    # . ? . . . .
-    # . * . . * ?
-    # . * . * * *
-    compressed = '.***.*..*****.*..*.?.....*..*?.*.***'
-    w, h = 6, 6
-
-  elif level == 6:
-    # Combination Lock VI
-    # * * ? . . . . * * .
-    # * . . . * . * . . .
-    # . . . * . . . . . .
-    # * . * . ? * * . * .
-    # * * ? . * ? ? . . .
-    # . * * . ? * . ? ? .
-    # . . . . * . * * * .
-    # . . . . . . . . . .
-    # * ? * * . * . . . *
-    # * . * ? . . * * ? .
-    compressed = '**?....**.*...*.*......*......*.*.?**.*.**?.*??....**.?*.??.....*.***...........*?**.*...**.*?..**?.'
-    w, h = 10, 10
-
-  board, revealed, constraints = uncompress(w, h, compressed)
-
-  print('board:', board)
-  print('constraints:')
-  pprint.pprint(constraints, width=160)
-
-  print(Puzzle(board, revealed, constraints, verbose=False).solve())
-
-
-def demo3():
-  # 53: Squared Square
-  board = [
-    (0, '?', (1, 3, 5, 6)),
-    (1, '?', (0, 2, 3, 4)),
-    (2, '?', (1, 4, 7, 8)),
-    (3, '*', (0, 1, 2, 4, 6, 7, 9, 10)),
-    (4, '.', (1, 2, 3, 7)),
-    (5, '.', (0, 6, 9, 13)),
-    (6, '?', (0, 3, 5, 9)),
-    (7, '.', (2, 3, 4, 8, 10, 11, 12)),
-    (8, '.', (2, 7, 12, 15)),
-    (9, '.', (3, 5, 6, 10, 11, 13, 14)),
-    (10, '?', (3, 7, 9, 11)),
-    (11, '.', (7, 9, 10, 12, 14, 15, 16)),
-    (12, '*', (7, 8, 11, 15)),
-    (13, '*', (5, 9, 14, 16)),
-    (14, '?', (9, 11, 13, 16)),
-    (15, '?', (8, 11, 12, 16)),
-    (16, '.', (11, 13, 14, 15)),
-  ]
-  revealed = [10, 11, 16]
-  constraints = [
-    (1, [0, 2, 13, 15]),  # pink
-    (0, [1, 5, 8, 16]),  # red
-    (1, [3, 7, 9, 11]),  # orange
-    (1, [4, 6, 10, 12, 14]),  # yellow
-    (3, list(range(17))),  # total
-  ]
-
-  print('board:', board)
-  print('constraints:', constraints)
-
-  print(Puzzle(board, revealed, constraints, verbose=True).solve())
-
-
-if __name__ == "__main__":
-  repl = 'repl' in sys.argv
-
-  demos = {
-    '1': demo1,
-    '2': demo2,
-    '3': demo3,
-  }
-
-  try:
-    if len(sys.argv) > 1:
-      n = sys.argv[1]
-      if n in demos:
-        demos[n]()
-
-    if repl:
-      IPython.embed()
-  except Exception:
-    if repl:
-      IPython.embed()
-    else:
-      raise
