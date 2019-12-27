@@ -1,5 +1,5 @@
 <PUZZLE>
-  <ID>YTest{{ puzzle_id }}</ID>
+  <ID>YStarman{{ puzzle_id }}</ID>
   <META>
     <TILE_TEXT>{{ tile_text }}</TILE_TEXT>
     <NEXT_PUZZLE_ID/>
@@ -24,8 +24,9 @@
         <HIGHLIGHTS_TAPER_START>true</HIGHLIGHTS_TAPER_START>
         <HIGHLIGHTS_TAPER_END>true</HIGHLIGHTS_TAPER_END>
       </POLY>
-      <HAS_MINE>{{ node.has_mine }}</HAS_MINE>
-      <SECRET>{{ node.secret }}</SECRET>
+      {% if node.has_mine %}<HAS_MINE>true</HAS_MINE>{% endif %}
+      {% if node.secret %}<SECRET>true</SECRET>{% endif %}
+      {% if node.revealed %}<REVEALED>true</REVEALED>{% endif %}
     </NODE>
     {% endfor %}
   </GRAPH>

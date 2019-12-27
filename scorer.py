@@ -53,7 +53,7 @@ def seqnum(result):
   return total_score
 
 
-def score(result, method='seqnum'):
+def score(result, method):
   if not result['solved']:
     return -1
 
