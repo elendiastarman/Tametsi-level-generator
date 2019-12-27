@@ -16,7 +16,7 @@ def score_candidate(board, revealed, constraints, compressed, score_method):
 
   constraints.append([compressed.count('*'), list(range(len(compressed)))])
 
-  puzzle = Puzzle(board, revealed, constraints)
+  puzzle = Puzzle(board, revealed, constraints, max_inexact_stages=1)
   result = puzzle.solve()
   return score(result, score_method), result
 

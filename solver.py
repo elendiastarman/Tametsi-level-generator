@@ -291,6 +291,7 @@ class Puzzle(object):
       for num, bounds in ineqs.items():
         print(f'  {binary_to_cells(num)} {bounds}')
 
+    inexact_stages = self.max_inexact_stages
     finished = False
     summary = []
 
@@ -333,6 +334,7 @@ class Puzzle(object):
 
       # Stage: use trivial
       if indexes['trivial']:
+        inexact_stages = self.max_inexact_stages
         newly_revealed = 0
         newly_flagged = 0
 
@@ -385,6 +387,7 @@ class Puzzle(object):
         continue
 
       if indexes['exact']:
+        inexact_stages = self.max_inexact_stages
         exact = indexes['exact']
         indexes['exact'] = dict()
 
@@ -404,6 +407,10 @@ class Puzzle(object):
           continue
 
       if indexes['inexact']:
+        inexact_stages -= 1
+        if inexact_stages == 0:
+          break
+
         inexact = indexes['inexact']
         indexes['inexact'] = dict()
 
