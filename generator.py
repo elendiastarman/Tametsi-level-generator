@@ -21,8 +21,23 @@ def score_candidate(board, revealed, constraints, compressed, score_method):
   return score(result, score_method), result
 
 
+def random_compressed(num, probabilities):
+  c = ''
+
+  for _ in range(num):
+    r = random.random()
+    if r <= probabilities[0]:
+      c += '.'
+    elif r <= probabilities[0] + probabilities[1]:
+      c += '*'
+    else:
+      c += '?'
+
+  return c
+
+
 def iteration(template_method, score_method, *template_args, **template_kwargs):
-  choices = '......***?'
+  probabilities = [0.5, 0.25]  # First is for '.', second is for '*', and remainder is '?'
   num, board, revealed, constraints, sanity_check = make_template(template_method, *template_args, **template_kwargs)
 
   invert_sort = False
@@ -38,10 +53,10 @@ def iteration(template_method, score_method, *template_args, **template_kwargs):
   scores = []
 
   while 1:
-    base = ''.join([random.choice(choices) for x in range(num)])
+    base = random_compressed(num, probabilities)
 
     while not sanity_check(base):
-      base = ''.join([random.choice(choices) for x in range(num)])
+      base = random_compressed(num, probabilities)
 
     round_num += 1
     temp_threshold = score_candidate(board, revealed, constraints, base, score_method)[0]
@@ -76,7 +91,10 @@ def iteration(template_method, score_method, *template_args, **template_kwargs):
 
     scores.append(temp_threshold)
 
-    if comp(temp_threshold, sum(scores) / len(scores)):
+    if len(scores) == 1 or comp(temp_threshold, 0.8 * threshold):
+      probabilities[0] = (probabilities[0] + temp_best.count('.') / len(temp_best)) / 2
+      probabilities[1] = (probabilities[1] + temp_best.count('*') / len(temp_best)) / 2
+
       output = 'Best of round {}: {} with score {}'.format(round_num, temp_best, temp_threshold)
       if comp(temp_threshold, limit):
         steps = ''.join(['T' if 'trivial' in step else 'E' if 'exact' in step else 'I' for step in temp_result['summary']])
@@ -84,6 +102,8 @@ def iteration(template_method, score_method, *template_args, **template_kwargs):
       print(output)
 
     if comp(temp_threshold, threshold):
+      probabilities[0] = temp_best.count('.') / len(temp_best)
+      probabilities[1] = temp_best.count('*') / len(temp_best)
       threshold = temp_threshold
       print(' ^ Best so far!')
 

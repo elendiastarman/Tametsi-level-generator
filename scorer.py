@@ -28,7 +28,10 @@ def seqnum(result):
       trivial_count += 1
       # total_score += 1 / 2 ** trivial_count
       # total_score += 1 / trivial_count
+      # total_score += 1
+    elif trivial_count:
       total_score += 1
+      trivial_count = 0
 
     if 'exact' in step:
       exact_count += 1
