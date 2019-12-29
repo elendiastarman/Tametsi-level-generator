@@ -35,7 +35,7 @@ def combination_lock(size):
         h[i] += board[i * size + j] == '*'
         v[i] += board[i + j * size] == '*'
 
-    return 0 in h or 0 in v
+    return 0 in h or 0 in v or size in h or size in v
 
   return size ** 2, board, revealed, constraints, sanity_check
 
