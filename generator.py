@@ -7,16 +7,18 @@ from scorer import score
 from templater import make_template
 
 
-def score_candidate(board, revealed, constraints, compressed, score_method):
+def score_candidate(board, revealed, constraints, compressed, score_method, verbose=False):
+  board.sort(key=lambda x: x[0] in revealed)
+
+  mapped = dict()
   for index, what in enumerate(compressed):
     board[index][1] = what
+    mapped[board[index][0]] = what
 
   for constraint in constraints:
-    constraint[0] = sum([board[i][1] == '*' for i in constraint[1]])
+    constraint[0] = sum([mapped[i] == '*' for i in constraint[1]])
 
-  constraints.append([compressed.count('*'), list(range(len(compressed)))])
-
-  puzzle = Puzzle(board, revealed, constraints, max_inexact_stages=1)
+  puzzle = Puzzle(board, revealed, constraints, verbose=verbose, max_inexact_stages=1)
   result = puzzle.solve()
   return score(result, score_method), result
 
@@ -176,4 +178,6 @@ if __name__ == '__main__':
     size = 6
 
   # iteration('combination_lock', 'seqnum', size)
-  gradient_ascent('combination_lock', 'seqnum', size)
+  # gradient_ascent('combination_lock', 'seqnum', size)
+  # gradient_ascent('cl_corner_bite', 'seqnum', size)
+  gradient_ascent('holey', 'seqnum', size)

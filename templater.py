@@ -28,12 +28,14 @@ def combination_lock(size):
 
       board.append([cell_id, '', neighbors])
 
-  def sanity_check(board):  # takes a compressed string
+  constraints.append([0, list(range(size ** 2))])
+
+  def sanity_check(compressed):  # takes a compressed string
     h, v = [0] * size, [0] * size
     for i in range(size):
       for j in range(size):
-        h[i] += board[i * size + j] == '*'
-        v[i] += board[i + j * size] == '*'
+        h[i] += compressed[i * size + j] == '*'
+        v[i] += compressed[i + j * size] == '*'
 
     return 0 in h or 0 in v or size in h or size in v
 
@@ -75,7 +77,7 @@ def combination_lock_render(compressed, size):
       text_location=(j * tile_size, -tile_size),
     ))
 
-  constraints.append([compressed.count('*'), list(range(num))])
+  constraints[-1][0] = compressed.count('*')
 
   result = Puzzle(board, revealed, constraints).solve()
   scored = score(result, 'seqnum')

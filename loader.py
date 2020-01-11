@@ -72,7 +72,9 @@ def load(contents, verbose=False):
       gray_mines[0] -= mine_count
       gray_mines[1].difference_update(set(mapped_ids))
 
-  constraints.append(gray_mines)
+  if total_mines != gray_mines[0]:
+    gray_mines[1] = sorted(gray_mines[1])
+    constraints.append(gray_mines)
 
   if verbose:
     print('board:')

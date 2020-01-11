@@ -35,14 +35,16 @@ def write_level(board_template, compressed, *template_args, **parameters):
   filename_safe_title = params['title'].replace(' ', '-')
 
   name = f'puzzles/{today}_{filename_safe_title}.puz'
-  print("Filename:", name)
+  print(name)
 
   with open(name, 'w') as file:
     file.write(level)
 
+  with open('latest.puz', 'w') as file:
+    file.write(level)
+
 
 if __name__ == '__main__':
-  print('argv:', sys.argv)
   if len(sys.argv) > 2:
     compressed = sys.argv[1]
     size = int(sys.argv[2])
@@ -50,4 +52,6 @@ if __name__ == '__main__':
     compressed = '.*.?...*.?..*.***?**.?..*?*.*....*.?'  # CL 1
     size = 6
 
-  write_level('combination_lock', compressed, size)
+  # write_level('combination_lock', compressed, size)
+  # write_level('cl_corner_bite', compressed, size)
+  write_level('holey', compressed, size)

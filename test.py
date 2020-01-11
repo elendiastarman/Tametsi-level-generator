@@ -17,6 +17,9 @@ def run(level_id=None, verbose=False):
         filenames = [name]
         break
 
+  if level_id == '-1':
+    filenames = ['../latest.puz']
+
   print('filenames:', filenames)
   for index, filename in enumerate(filenames):
     with open(f'test/{filename}') as level:

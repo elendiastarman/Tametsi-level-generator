@@ -267,6 +267,7 @@ class Puzzle(object):
     revealed = cells_to_binary(self.revealed)
     flagged = 0
 
+    self.board.sort()
     board_ineqs = dict()
     for tile_id, what, neighbors in self.board:
       if what == '.':
@@ -281,8 +282,17 @@ class Puzzle(object):
         if cells:
           board_ineqs[2 ** tile_id] = [cells, count, count, bin(cells).count('1')]
 
+    if self.verbose:
+      print('board_ineqs:')
+      for tile, (num, *bounds) in board_ineqs.items():
+        print(f'  {tile} - {binary_to_cells(num)} {bounds}')
+
     for tile in self.revealed:
       ineq = board_ineqs.pop(2 ** tile, None)
+
+      if self.verbose:
+        print('adding board ineq:', tile, binary_to_cells(ineq[0]), ineq[1:])
+
       if ineq is not None:
         self.add_ineq(ineq, ineqs, indexes)
 
@@ -407,16 +417,19 @@ class Puzzle(object):
           continue
 
       if indexes['inexact']:
-        inexact_stages -= 1
-        if inexact_stages == 0:
-          break
-
         inexact = indexes['inexact']
         indexes['inexact'] = dict()
 
         summary[-1]['inexact'] = dict(count=len(set.union(*exact.values())))
         if self.verbose:
           print('num inexact:', summary[-1]['inexact']['count'])
+          print('num inexact stages:', inexact_stages)
+
+        if inexact_stages == 0:
+          if self.verbose:
+            print('Exceeded max number of inexact stages!')
+          break
+        inexact_stages -= 1
 
         added = self.cross_all_pairs(inexact, inexact, ineqs, indexes, max_cells, max_mines)
         added = self.cross_all_pairs(inexact, indexes['stale'], ineqs, indexes, max_cells, max_mines) or added

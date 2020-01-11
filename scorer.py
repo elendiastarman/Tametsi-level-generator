@@ -49,7 +49,7 @@ def seqnum(result):
     elif inexact_count:
       # total_score += 2 / (2 ** inexact_count - 1)
       # total_score += inexact_total / inexact_count
-      total_score += inexact_count
+      total_score += 10 * inexact_count
       inexact_count = 0
       inexact_total = 0
 
