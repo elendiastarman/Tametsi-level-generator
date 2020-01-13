@@ -116,8 +116,8 @@ def gradient_ascent(template_method, score_method, *template_args, **template_kw
   id_map = {board[index][0]: index for index in range(num)}
   starting_probabilities = [0.5, 0.25]  # First is for '.', second is for '*', and remainder is '?'
 
-  trials = 30
-  best_of = 5
+  trials = 50
+  best_of = 10
 
   invert_sort = False  # True if lower scores are better
   if not invert_sort:
@@ -197,9 +197,30 @@ def gradient_ascent(template_method, score_method, *template_args, **template_kw
     top = sorted(solved, key=lambda x: x[0], reverse=invert_sort)[-best_of:]
 
     if comp(top[-1][0], 0.8 * best_score):
-      output = f'Best of round {round_num}: {top[-1][1]} with score {top[-1][0]}'
-      if comp(scored, limit):
-        output = output + ' and steps ' + ''.join(['T' if 'trivial' in step else 'E' if 'exact' in step else 'I' for step in top[-1][2]['summary']])
+      # iteration stage - 1-char changes
+      base_variant = top[-1]
+
+      while 1:
+        variants = []
+        base_candidate = base_variant[1]
+
+        for index in range(num):
+          for char in ['.', '?', '*']:
+            if char == base_candidate[index]:
+              continue
+
+            candidate = base_candidate[:index] + char + base_candidate[index + 1:]
+            scored, result = score_candidate(board, revealed, constraints, candidate, score_method)
+            variants.append([scored, candidate, result])
+
+        best_variant = sorted(variants, key=lambda x: x[0], reverse=invert_sort)[-1]
+        if not comp(best_variant[0], base_variant[0]):
+          break
+        base_variant = best_variant
+
+      output = f'Best of round {round_num}: {base_variant[1]} with score {base_variant[0]}'
+      if comp(base_variant[0], limit):
+        output = output + ' and steps ' + ''.join(['T' if 'trivial' in step else 'E' if 'exact' in step else 'I' for step in base_variant[2]['summary']])
       print(output)
 
       score_total = sum([_[0] for _ in top])
