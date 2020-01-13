@@ -113,10 +113,11 @@ def iteration(template_method, score_method, *template_args, **template_kwargs):
 
 def gradient_ascent(template_method, score_method, *template_args, **template_kwargs):
   num, board, revealed, constraints, sanity_check = make_template(template_method, *template_args, **template_kwargs)
+  id_map = {board[index][0]: index for index in range(num)}
   starting_probabilities = [0.5, 0.25]  # First is for '.', second is for '*', and remainder is '?'
 
-  trials = 100
-  best_of = 10
+  trials = 30
+  best_of = 5
 
   invert_sort = False  # True if lower scores are better
   if not invert_sort:
@@ -135,15 +136,63 @@ def gradient_ascent(template_method, score_method, *template_args, **template_kw
     round_num += 1
 
     while len(solved) < trials:
+      attempts = 10
       candidate = random_compressed(num, probabilities)
 
-      while not sanity_check(candidate):
-        candidate = random_compressed(num, probabilities)
+      while attempts:
+        attempts -= 1
 
-      scored, result = score_candidate(board, revealed, constraints, candidate, score_method)
+        scored, result = score_candidate(board, revealed, constraints, candidate, score_method)
+        # print(f'score {scored} in {len(result["summary"])} rounds for candidate {candidate}')
 
-      if comp(scored, limit):
-        solved.append([scored, candidate, result])
+        if comp(scored, limit):
+          break
+
+        result_known = result['revealed'].union(result['flagged'])
+        boundary_empty = set()
+        boundary_question = set()
+        boundary_unknown = set()
+        all_unknown = set()
+
+        for cell_id, what, neighbors in board:
+          if cell_id in result['revealed'] and set(neighbors).difference(result_known):
+            if what == '.':
+              boundary_empty.add(cell_id)
+            elif what == '?':
+              boundary_question.add(cell_id)
+            else:
+              raise ValueError('We got a problem here!')
+
+          elif cell_id not in result_known:
+            all_unknown.add(cell_id)
+
+            if set(neighbors).intersection(result_known):
+              boundary_unknown.add(cell_id)
+
+        exploded = list(candidate)
+
+        if boundary_question:
+          for cell_id in boundary_question:
+            exploded[id_map[cell_id]] = '.'
+
+        elif boundary_unknown:
+          replacements = list(random_compressed(len(boundary_unknown), probabilities))
+          for cell_id in boundary_unknown:
+            exploded[id_map[cell_id]] = replacements.pop()
+
+        else:
+          replacements = list(random_compressed(len(all_unknown), probabilities))
+          for cell_id in all_unknown:
+            exploded[id_map[cell_id]] = replacements.pop()
+
+        candidate = ''.join(exploded)
+
+        if sanity_check and not sanity_check(candidate):
+          continue
+
+        # import ipdb; ipdb.set_trace()
+
+      solved.append([scored, candidate, result])
 
     top = sorted(solved, key=lambda x: x[0], reverse=invert_sort)[-best_of:]
 
