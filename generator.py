@@ -172,12 +172,10 @@ def gradient_ascent(template_method, score_method, *template_args, **template_kw
 
 if __name__ == '__main__':
   print('argv:', sys.argv)
-  if len(sys.argv) > 1:
-    size = int(sys.argv[1])
-  else:
-    size = 6
 
   # iteration('combination_lock', 'seqnum', size)
   # gradient_ascent('combination_lock', 'seqnum', size)
   # gradient_ascent('cl_corner_bite', 'seqnum', size)
-  gradient_ascent('holey', 'seqnum', size)
+  # gradient_ascent('holey', 'seqnum', size)
+  # gradient_ascent('l_shape_grid', 'seqnum', *sys.argv[1:])
+  gradient_ascent(*sys.argv[1:])

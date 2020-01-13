@@ -20,10 +20,11 @@ def write_level(board_template, compressed, *template_args, **parameters):
   )
   params.update(parameters)
 
-  title, tile_text, nodes, columns, score = render_template(board_template, compressed, *template_args)
+  title, tile_text, nodes, columns, colors, score = render_template(board_template, compressed, *template_args)
 
   params['nodes'] = nodes
   params['columns'] = columns
+  params['colors'] = colors
   params['puzzle_id'] = int(time.time())
   params['title'] = title
   params['tile_text'] = tile_text
@@ -45,13 +46,7 @@ def write_level(board_template, compressed, *template_args, **parameters):
 
 
 if __name__ == '__main__':
-  if len(sys.argv) > 2:
-    compressed = sys.argv[1]
-    size = int(sys.argv[2])
-  else:
-    compressed = '.*.?...*.?..*.***?**.?..*?*.*....*.?'  # CL 1
-    size = 6
-
   # write_level('combination_lock', compressed, size)
   # write_level('cl_corner_bite', compressed, size)
-  write_level('holey', compressed, size)
+  # write_level('holey', compressed, size)
+  write_level('l_shape_grid', *sys.argv[1:])

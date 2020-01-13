@@ -1,3 +1,4 @@
+from functools import partial
 from solver import Puzzle
 from scorer import score
 
@@ -84,7 +85,7 @@ def combination_lock_render(compressed, size):
   title = f'Combination Lock {size}x{size} with score {scored}'
   tile_text = 'CLX'
 
-  return title, tile_text, nodes, columns, scored
+  return title, tile_text, nodes, columns, None, scored
 
 
 def cl_corner_bite(size):
@@ -164,7 +165,7 @@ def cl_corner_bite_render(compressed, size):
   title = f'CL Corner Bite {size}x{size} with score {scored}'
   tile_text = 'CoB'
 
-  return title, tile_text, nodes, columns, scored
+  return title, tile_text, nodes, columns, None, scored
 
 
 def holey(size):

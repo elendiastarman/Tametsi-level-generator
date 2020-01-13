@@ -41,6 +41,15 @@
     </COLUMN_HINT>
     {% endfor %}
   </COLUMN_HINT_LIST>
+  <HINT_LIST>
+    {% for color in colors %}
+    <HINT>
+      <IDS>{{ color.ids|join(',') }}</IDS>
+      <COLOR>{{ color.color }}</COLOR>
+      <IS_DARK>{{ color.is_dark }}</IS_DARK>
+    </HINT>
+    {% endfor %}
+  </HINT_LIST>
   <TEXT/>
   <TEXT_POS>0.0,0.0</TEXT_POS>
   <CORNER_FLAG>true</CORNER_FLAG>
