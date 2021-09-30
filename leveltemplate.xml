@@ -42,7 +42,7 @@
     {% endfor %}
   </COLUMN_HINT_LIST>
   <HINT_LIST>
-    {% for color in colors %}
+    {% for color in colors or [] %}
     <HINT>
       <IDS>{{ color.ids|join(',') }}</IDS>
       <COLOR>{{ color.color }}</COLOR>

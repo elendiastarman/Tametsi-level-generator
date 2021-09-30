@@ -1,3 +1,4 @@
+import re
 import sys
 import random
 import operator
@@ -240,12 +241,25 @@ def gradient_ascent(template_method, score_method, *template_args, **template_kw
       probabilities = [starting_probabilities[:] for _ in range(num)]
 
 
+# python generator <template_name> <scoring_method> [arg1] [arg2] [...]
+
+# there are two generation algorithms, 'iteration' and 'gradient_ascent';
+# gradient_ascent is the default since it tends to produce better results faster
+# both take a template name and scoring method, plus args for the template
+# template name is one of those defined in templater.py
+# scoring method is one of those defined in scorer.py
+
 if __name__ == '__main__':
-  print('argv:', sys.argv)
+  print('argv:', sys.argv)  # useful for piping to a file and remembering what the command was
 
   # iteration('combination_lock', 'seqnum', size)
   # gradient_ascent('combination_lock', 'seqnum', size)
   # gradient_ascent('cl_corner_bite', 'seqnum', size)
   # gradient_ascent('holey', 'seqnum', size)
   # gradient_ascent('l_shape_grid', 'seqnum', *sys.argv[1:])
-  gradient_ascent(*sys.argv[1:])
+  args = [int(arg) if re.match(r'\d+', arg) else arg for arg in sys.argv[1:]]
+
+  try:
+    gradient_ascent(*args)
+  except KeyboardInterrupt:
+    print('^C interrupted!')
