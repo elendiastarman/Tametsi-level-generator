@@ -6,19 +6,19 @@ from scorer import score
 
 
 def run(level_id=None, verbose=False):
-  filenames = []
-
-  with open('test/index') as index:
-    for line in index.read().split('\n'):
-      id, name = line.split(' ')
-      filenames.append(name)
-
-      if level_id and id == level_id:
-        filenames = [name]
-        break
-
   if level_id == '-1':
     filenames = ['../latest.puz']
+
+  else:
+    filenames = []
+    with open('test/index') as index:
+      for line in index.read().split('\n'):
+        id, name = line.split(' ')
+        filenames.append(name)
+
+        if level_id and id == level_id:
+          filenames = [name]
+          break
 
   print('filenames:', filenames)
   for index, filename in enumerate(filenames):
