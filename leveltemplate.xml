@@ -30,7 +30,6 @@
     </NODE>
     {% endfor %}
   </GRAPH>
-  <HINT_LIST/>
   <COLUMN_HINT_LIST>
     {% for column in columns %}
     <COLUMN_HINT>
