@@ -8,6 +8,7 @@
 * [Example invocation](#example-invocation)
 * [Example output](#example-output)
 * [Playing in Tametsi](#playing-in-tametsi)
+* [Website visualization](#website-visualization)
 
 ### Individual parts:
 
@@ -60,6 +61,10 @@ filenames: ['../latest.puz']
 ### Playing in Tametsi
 
 Tametsi actually has a built-in method of loading additional puzzle files - that's how the bonus levels 101-160 are loaded! They're in `/puzzles` within the root Tametsi folder (likely `/your/path/to/SteamLibrary/steamapps/common/Tametsi`). On game startup, Tametsi reads all `.puz` files in this folder and displays them on the in-game selection screen. Simply put your newly-generated puzzles in that folder and reboot the game!
+
+### Website visualization
+
+You can visualize the solver's solution for a particular puzzle by running the visualizer script `python visualizer.py [filename.puz]` (if no filename is given, defaults to `latest.puz`) and then opening `visualizer.html` in your favorite web browser.
 
 ## How to Use
 
