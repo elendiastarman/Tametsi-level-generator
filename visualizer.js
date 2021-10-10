@@ -462,12 +462,12 @@ function syncBoard(newRow, force) {
         continue
 
       // correct any misclicks
-      trivial.revealed.forEach(nodeId => setFlagged(nodes[nodeId], false))
-      trivial.flagged.forEach(nodeId => setRevealed(nodes[nodeId], false))
+      trivial.revealed.forEach(nodeId => setFlagged(nodes[nodeIds[nodeId]], false))
+      trivial.flagged.forEach(nodeId => setRevealed(nodes[nodeIds[nodeId]], false))
 
       // real state
-      trivial.revealed.forEach(nodeId => setRevealed(nodes[nodeId], true))
-      trivial.flagged.forEach(nodeId => setFlagged(nodes[nodeId], true))
+      trivial.revealed.forEach(nodeId => setRevealed(nodes[nodeIds[nodeId]], true))
+      trivial.flagged.forEach(nodeId => setFlagged(nodes[nodeIds[nodeId]], true))
       currentRow += 1
     }
   }
@@ -478,8 +478,8 @@ function syncBoard(newRow, force) {
       if (!trivial)
         continue
 
-      trivial.revealed.forEach(nodeId => setRevealed(nodes[nodeId], false))
-      trivial.flagged.forEach(nodeId => setFlagged(nodes[nodeId], false))
+      trivial.revealed.forEach(nodeId => setRevealed(nodes[nodeIds[nodeId]], false))
+      trivial.flagged.forEach(nodeId => setFlagged(nodes[nodeIds[nodeId]], false))
       currentRow -= 1
     }
   }
@@ -509,7 +509,6 @@ function gotoEnd() {
 $$('#fast-forward').addEventListener('click', gotoEnd)
 
 $$('#scroll').addEventListener('wheel', event => {
-  console.log(event)
   event.preventDefault()
   if (event.deltaY < 0)
     goBack()
