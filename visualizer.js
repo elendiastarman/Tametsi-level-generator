@@ -461,6 +461,11 @@ function syncBoard(newRow, force) {
       if (!trivial)
         continue
 
+      // correct any misclicks
+      trivial.revealed.forEach(nodeId => setFlagged(nodes[nodeId], false))
+      trivial.flagged.forEach(nodeId => setRevealed(nodes[nodeId], false))
+
+      // real state
       trivial.revealed.forEach(nodeId => setRevealed(nodes[nodeId], true))
       trivial.flagged.forEach(nodeId => setFlagged(nodes[nodeId], true))
       currentRow += 1
