@@ -37,6 +37,10 @@ function makePoly(data) {
   return points
 }
 
+function realBool(data) {
+  return data != null && data.toLowerCase() == 'true'
+}
+
 $$('#puzzle-id').innerText = extract(data.puzzle, 'ID', /\w+/)
 $$('#puzzle-tile-text').innerText = extract(data.puzzle, 'TILE_TEXT', /\w+/)
 $$('#puzzle-title').innerText = extract(data.puzzle, 'TITLE', /.+/)
@@ -58,9 +62,9 @@ nodesSrc.forEach(nodeSrc => {
   node.edges = extract(nodeSrc, 'EDGES', /.+/).split(',')
   node.pos = makePos(extract(nodeSrc, 'POS', /.+/).split(','))
   node.poly = makePoly(extract(nodeSrc, 'POINTS', /.+/).split(','))
-  node.has_mine = extract(nodeSrc, 'HAS_MINE', /.+/) == 'true'
-  node.secret = extract(nodeSrc, 'SECRET', /.+/) == 'true'  // tiles with '?'
-  node.revealed = extract(nodeSrc, 'REVEALED', /.+/) == 'true'  // tiles that start cleared
+  node.has_mine = realBool(extract(nodeSrc, 'HAS_MINE', /.+/))
+  node.secret = realBool(extract(nodeSrc, 'SECRET', /.+/))  // tiles with '?'
+  node.revealed = realBool(extract(nodeSrc, 'REVEALED', /.+/))  // tiles that start cleared
   node.flagged = false
   node.color = 'gray'
 })
@@ -82,7 +86,7 @@ colorHints.forEach(hintSrc => {
   let hint = {type: 'color'}
   hint.ids = extract(hintSrc, 'IDS', /.+/).match(/\d+/g)
   hint.color = extract(hintSrc, 'COLOR', /.+/)
-  hint.is_dark = extract(hintSrc, 'IS_DARK', /.+/) == 'true' ? 'dark' : ''
+  hint.is_dark = realBool(extract(hintSrc, 'IS_DARK', /.+/)) ? 'dark' : ''
   hints.color.push(hint)
 
   hint.ids.forEach(nodeId => nodes[nodeId].color = hint.is_dark + hint.color)
@@ -96,7 +100,7 @@ nodeIds.forEach(nodeId => {
 })
 hints.color.unshift(grayHint)
 
-let cornerFlag = extract(data.puzzle, 'CORNER_FLAG', /.+/) == 'true'
+let cornerFlag = realBool(extract(data.puzzle, 'CORNER_FLAG', /.+/))
 
 // now we start drawing things
 

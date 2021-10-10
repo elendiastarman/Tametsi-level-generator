@@ -15,9 +15,9 @@ def load(contents, verbose=False):
 
     node_id = re.search('<ID>(.*?)</ID>', node).group(1)
     neighbor_ids = re.search('<EDGES>(.*?)</EDGES>', node).group(1).split(',')
-    revealed = bool(re.search('<REVEALED>true</REVEALED>', node))
-    has_mine = bool(re.search('<HAS_MINE>true</HAS_MINE>', node))
-    secret = bool(re.search('<SECRET>true</SECRET>', node))
+    revealed = bool(re.search('<REVEALED>[Tt]rue</REVEALED>', node))
+    has_mine = bool(re.search('<HAS_MINE>[Tt]rue</HAS_MINE>', node))
+    secret = bool(re.search('<SECRET>[Tt]rue</SECRET>', node))
 
     if neighbor_ids == ['']:  # no neighbors
       neighbor_ids = []
