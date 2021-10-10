@@ -40,7 +40,7 @@ function makePoly(data) {
 $$('#puzzle-id').innerText = extract(data.puzzle, 'ID', /\w+/)
 $$('#puzzle-tile-text').innerText = extract(data.puzzle, 'TILE_TEXT', /\w+/)
 $$('#puzzle-title').innerText = extract(data.puzzle, 'TITLE', /.+/)
-$$('#puzzle-author').innerText = extract(data.puzzle, 'AUTHOR', /.+/)
+$$('#puzzle-author').innerText = extract(data.puzzle, 'AUTHOR', /.+/) || 'Tudwell'
 let score = extract(data.puzzle, 'SCORE', /[\d\.]+/)
 if (score)
   $$('#puzzle-score').innerText = ` (score = ${score})`
@@ -165,14 +165,47 @@ function tileClick(event) {
   }
 }
 
+let highlightNeighbors = false
+let hoveredId = ''
+
 function tileHover(event) {
-  let nodeId = event.target.id.slice(4)
+  if (event.target.tagName != 'polygon' && (event.target.tagName != 'svg' || !hoveredId))
+    return
+
+  let nodeId = event.target.tagName == 'polygon' ? event.target.id.slice(4) : hoveredId
   $$(`#overlay${nodeId}`).setAttribute('display', 'visible')
+  $$(`#node-id-display`).innerText = nodeId
+  nodes[nodeId].edges.forEach(neighborId => $$(`#overlay${neighborId}`).setAttribute('display', highlightNeighbors ? 'visible' : 'none'))
+  hoveredId = nodeId
 }
 
 function tileLeave(event) {
+  if (event.target.tagName != 'polygon')
+    return
+
   let nodeId = event.target.id.slice(4)
   $$(`#overlay${nodeId}`).setAttribute('display', 'none')
+  $$(`#node-id-display`).innerText = ''
+  nodes[nodeId].edges.forEach(neighborId => $$(`#overlay${neighborId}`).setAttribute('display', 'none'))
+  hoveredId = ''
+}
+
+function showNeighbors(event) {
+  if (highlightNeighbors)
+    return
+
+  if (event.ctrlKey) {
+    highlightNeighbors = true
+    tileHover(event)
+  }
+}
+
+function hideNeighbors(event) {
+  if (!highlightNeighbors)
+    return
+
+  highlightNeighbors = false
+  tileHover(event)
 }
 
 let maxX = maxY = 0
@@ -215,13 +248,12 @@ nodeIds.forEach(nodeId => {
 
   tile.setAttribute('fill', !node.revealed ? node.color : 'rgba(0, 0, 0, 0)')
   tile.setAttribute('stroke', 'lightgray')
-  tile.setAttribute('stroke-width', '.25')
 
   let overlay = document.createElementNS('http://www.w3.org/2000/svg', 'polygon')
   overlay.setAttribute('id', `overlay${nodeId}`)
   overlay.setAttribute('points', pointstr)
-  overlay.setAttribute('stroke', 'rgba(200, 200, 100, 0.5)')
-  overlay.setAttribute('fill', 'rgba(200, 200, 100, 0.15)')
+  overlay.setAttribute('stroke', 'rgba(200, 200, 0, 0.75)')
+  overlay.setAttribute('fill', 'rgba(200, 200, 100, 0.2)')
   overlay.setAttribute('pointer-events', 'none')
   overlay.setAttribute('display', 'none')
 
@@ -248,15 +280,15 @@ nodeIds.forEach(nodeId => {
   text.setAttribute('x', (tileMinX + tileMaxX) / 2)
   text.setAttribute('y', (tileMinY + tileMaxY) / 2 + 1)
   text.setAttribute('fill', char == '*' ? 'red' : 'lightgray')
-  // text.setAttribute('font-size', `${(tileMaxY - tileMinY)}px`)
   text.setAttribute('dominant-baseline', 'middle')
   text.setAttribute('text-anchor', 'middle')
 
   let layers = document.createElementNS('http://www.w3.org/2000/svg', 'g')
   layers.append(text)
   layers.append(tile)
-  layers.append(overlay)
   layers.setAttribute('transform', `translate(${node.pos.x},${node.pos.y})`)
+  overlay.setAttribute('transform', `translate(${node.pos.x},${node.pos.y})`)
+  $$('#svg-overlay').append(overlay)
 
   minX = Math.min(minX, node.pos.x + tileMinX)
   maxX = Math.max(maxX, node.pos.x + tileMaxX)
@@ -271,10 +303,11 @@ nodeIds.forEach(nodeId => {
   tiles.append(layers)
 })
 
-// set font size
-console.log('minDist', minDist)
+// set font size and stroke width
 nodeIds.forEach(nodeId => {
   $$(`#text${nodeId}`).setAttribute('font-size', `${minDist}px`)
+  $$(`#tile${nodeId}`).setAttribute('stroke-width', `${minDist / 20}`)
+  $$(`#overlay${nodeId}`).setAttribute('stroke-width', `${minDist / 5}`)
 })
 
 // column hints
@@ -328,12 +361,13 @@ hints.color.forEach((hint, index) => {
 
 let height = (maxY - minY) + 5 * minDist
 let width = Math.max((maxX - minX) + 10 * minDist, height * 16 / 9)
-console.log(`minX: ${minX}, maxX: ${maxX}`)
-console.log(`minY: ${minY}, maxY: ${maxY}`)
-console.log(`width: ${width}, height: ${height}`)
 let svg = $$('#svg')
 // svg.setAttribute('viewBox', `${minX - width / 10} ${minY - height / 10} ${width / 2} ${height * 3 / 4}`)
 svg.setAttribute('viewBox', `${minX - 3 * minDist} ${minY - 2 * minDist} ${width} ${height}`)
+svg.addEventListener('focus', event => {})
+svg.addEventListener('keydown', showNeighbors)
+svg.addEventListener('keyup', hideNeighbors)
+svg.focus()
 
 // now for the solution stuff
 let table = $$('#solution-steps')
@@ -370,7 +404,6 @@ data.solution.summary.forEach((step, index) => {
       span.setAttribute('id', `span${nodeId}`)
       span.setAttribute('onmouseenter', 'tileHover(event)')
       span.setAttribute('onmouseleave', 'tileLeave(event)')
-      // span.setAttribute('onclick', 'syncBoard(actionable.indexOf(parseInt(event.target.parentNode.parentNode.id.slice(5))))')
       spans.push(span.outerHTML)
     })
     revealed.innerHTML = spans.join(', ')
@@ -382,7 +415,6 @@ data.solution.summary.forEach((step, index) => {
       span.setAttribute('id', `span${nodeId}`)
       span.setAttribute('onmouseenter', 'tileHover(event)')
       span.setAttribute('onmouseleave', 'tileLeave(event)')
-      // span.setAttribute('onclick', 'syncBoard(actionable.indexOf(parseInt(event.target.parentNode.parentNode.id.slice(5))))')
       spans.push(span.outerHTML)
     })
     flagged.innerHTML = spans.join(', ')
