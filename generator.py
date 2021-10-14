@@ -16,6 +16,9 @@ def score_candidate(board, revealed, constraints, compressed, score_method, verb
     board[index][1] = what
     mapped[board[index][0]] = what
 
+  for r in revealed:
+    mapped[r] = '.'
+
   for constraint in constraints:
     constraint[0] = sum([mapped[i] == '*' for i in constraint[1]])
 
@@ -41,7 +44,12 @@ def random_compressed(num, probabilities):
 
 def iteration(template_method, score_method, *template_args, **template_kwargs):
   probabilities = [0.2, 0.5]  # First is for '.', second is for '*', and remainder is '?'
-  num, board, revealed, constraints, sanity_check = make_template(template_method, *template_args, **template_kwargs)
+  data = make_template(template_method, *template_args, **template_kwargs)
+  num = data['num']
+  board = data['board']
+  revealed = data['revealed']
+  constraints = data['constraints']
+  sanity_check = data.get('sanity_check', None)
 
   invert_sort = False  # True if lower scores are better
   if invert_sort:
@@ -113,7 +121,13 @@ def iteration(template_method, score_method, *template_args, **template_kwargs):
 
 
 def gradient_ascent(template_method, score_method, *template_args, **template_kwargs):
-  num, board, revealed, constraints, sanity_check = make_template(template_method, *template_args, **template_kwargs)
+  data = make_template(template_method, *template_args, **template_kwargs)
+  num = data['num']
+  board = data['board']
+  revealed = data['revealed']
+  constraints = data['constraints']
+  sanity_check = data.get('sanity_check', None)
+
   id_map = {board[index][0]: index for index in range(num)}
   starting_probabilities = [0.5, 0.25]  # First is for '.', second is for '*', and remainder is '?'
 
@@ -130,7 +144,8 @@ def gradient_ascent(template_method, score_method, *template_args, **template_kw
 
   round_num = 0
   best_score = 0
-  probabilities = [starting_probabilities[:] for _ in range(num)]
+  num_unrevealed = num - len(revealed)
+  probabilities = [starting_probabilities[:] for _ in range(num_unrevealed)]
 
   while 1:
     solved = []
@@ -138,7 +153,7 @@ def gradient_ascent(template_method, score_method, *template_args, **template_kw
 
     while len(solved) < trials:
       attempts = 10
-      candidate = random_compressed(num, probabilities)
+      candidate = random_compressed(num_unrevealed, probabilities)
 
       while attempts:
         attempts -= 1
@@ -205,7 +220,7 @@ def gradient_ascent(template_method, score_method, *template_args, **template_kw
         variants = []
         base_candidate = base_variant[1]
 
-        for index in range(num):
+        for index in range(num_unrevealed):
           for char in ['.', '?', '*']:
             if char == base_candidate[index]:
               continue
@@ -225,7 +240,7 @@ def gradient_ascent(template_method, score_method, *template_args, **template_kw
       print(output)
 
       score_total = sum([_[0] for _ in top])
-      for index in range(num):
+      for index in range(num_unrevealed):
         probabilities[index][0] = sum([s * (c[index] == '.') for s, c, r in top]) / score_total
         probabilities[index][1] = sum([s * (c[index] == '*') for s, c, r in top]) / score_total
 
@@ -238,7 +253,7 @@ def gradient_ascent(template_method, score_method, *template_args, **template_kw
     if sum([p in [[0, 0], [0, 1], [1, 0]] for p in probabilities]) > 0.8 * len(probabilities):
       print('\n<restarting>\n')
       best_score = 0
-      probabilities = [starting_probabilities[:] for _ in range(num)]
+      probabilities = [starting_probabilities[:] for _ in range(num_unrevealed)]
 
 
 # python generator <template_name> <scoring_method> [arg1] [arg2] [...]

@@ -88,3 +88,66 @@ def load(contents, verbose=False):
   name = re.search('<TITLE>(.+?)</TITLE>', contents).group(1)
   reverse_id_map = [node['node_id'] for node in nodes]
   return Puzzle(board, revealed, constraints, verbose=verbose), name, reverse_id_map
+
+
+def substitute(contents, verbose=False):
+  """Takes a puzzle file and pulls nodes, column hints,
+  and color hints out of it with new data substituted in"""
+  nodes = []
+
+  # Not parsing arbitrary XML here!
+  matches = re.finditer('<NODE>.*?</NODE>', contents, re.DOTALL)
+  for match in matches:
+    node = match.group(0)
+
+    node_id = re.search('<ID>(.*?)</ID>', node).group(1)
+    neighbor_ids = re.search('<EDGES>(.*?)</EDGES>', node).group(1).split(',')
+    position = re.search('<POS>(.*?)</POS>', node).group(1).split(',')
+    points = re.search('<POINTS>(.*?)</POINTS>', node).group(1)
+    revealed = bool(re.search('<REVEALED>[Tt]rue</REVEALED>', node))
+    has_mine = bool(re.search('<HAS_MINE>[Tt]rue</HAS_MINE>', node))
+    secret = bool(re.search('<SECRET>[Tt]rue</SECRET>', node))
+
+    if neighbor_ids == ['']:  # no neighbors
+      neighbor_ids = []
+
+    nodes.append(dict(
+      id=node_id,
+      neighbors=neighbor_ids,
+      position=position,
+      points=points,
+      revealed=revealed,
+      has_mine=has_mine,
+      secret=secret,
+    ))
+
+  columns = []
+  colors = []
+  hints = re.finditer('<(COLUMN_)?HINT>.*?</(COLUMN_)?HINT>', contents, re.DOTALL)
+  for hint in hints:
+    hint_src = hint.group(0)
+    ids = re.search('<IDS>(.*?)</IDS>', hint_src).group(1).split(',')
+
+    if 'COLUMN' not in hint.group(0):  # that is, a color hint
+      colors.append(dict(
+        ids=ids,
+        color=re.search('<COLOR>(.*?)</COLOR>', hint_src).group(1),
+        is_dark=re.search('<IS_DARK>(.*?)</IS_DARK>', hint_src).group(1),
+      ))
+    else:
+      columns.append(dict(
+        ids=ids,
+        text_location=re.search('<TEXT_LOCATION>(.*?)</TEXT_LOCATION>', hint_src).group(1).split(','),
+        text_rotation=re.search('<TEXT_ROTATION>(.*?)</TEXT_ROTATION>', hint_src).group(1),
+        text_size_factor=re.search('<TEXT_SIZE_FACTOR>(.*?)</TEXT_SIZE_FACTOR>', hint_src).group(1),
+      ))
+
+  name = re.search('<TITLE>(.+?)</TITLE>', contents).group(1)
+  reverse_id_map = [node['id'] for node in nodes]
+  return dict(
+    name=name,
+    reverse_id_map=reverse_id_map,
+    nodes=nodes,
+    columns=columns,
+    colors=colors,
+  )

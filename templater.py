@@ -1,6 +1,7 @@
 from functools import partial
 from solver import Puzzle
 from scorer import score
+from loader import load, substitute
 
 
 def combination_lock(size):
@@ -40,7 +41,13 @@ def combination_lock(size):
 
     return 0 in h or 0 in v or size in h or size in v
 
-  return size ** 2, board, revealed, constraints, sanity_check
+  return dict(
+    num=size ** 2,
+    board=board,
+    revealed=revealed,
+    constraints=constraints,
+    sanity_check=sanity_check,
+  )
 
 
 def combination_lock_render(compressed, size):
@@ -85,7 +92,13 @@ def combination_lock_render(compressed, size):
   title = f'Combination Lock {size}x{size} with score {scored}'
   tile_text = 'CLX'
 
-  return title, tile_text, nodes, columns, None, scored
+  return dict(
+    title=title,
+    tile_text=tile_text,
+    nodes=nodes,
+    columns=columns,
+    scored=scored,
+  )
 
 
 def cl_corner_bite(size):
@@ -119,7 +132,13 @@ def cl_corner_bite(size):
   def sanity_check(compressed):  # takes a compressed string
     return compressed[0] == '.'
 
-  return size ** 2, board, revealed, constraints, sanity_check
+  return dict(
+    num=size ** 2,
+    board=board,
+    revealed=revealed,
+    constraints=constraints,
+    sanity_check=sanity_check,
+  )
 
 
 def cl_corner_bite_render(compressed, size):
@@ -165,7 +184,13 @@ def cl_corner_bite_render(compressed, size):
   title = f'CL Corner Bite {size}x{size} with score {scored}'
   tile_text = 'CoB'
 
-  return title, tile_text, nodes, columns, None, scored
+  return dict(
+    title=title,
+    tile_text=tile_text,
+    nodes=nodes,
+    columns=columns,
+    scored=scored,
+  )
 
 
 def holey(size):
@@ -217,7 +242,13 @@ def holey(size):
     return True
 
   num = size ** 2 - (size // 2) ** 2
-  return num, board, revealed, constraints, sanity_check
+  return dict(
+    num=num,
+    board=board,
+    revealed=revealed,
+    constraints=constraints,
+    sanity_check=sanity_check,
+  )
 
 
 def holey_render(compressed, size):
@@ -268,7 +299,13 @@ def holey_render(compressed, size):
   title = f'Holey {size}x{size} with score {scored}'
   tile_text = 'HOL'
 
-  return title, tile_text, nodes, columns, None, scored
+  return dict(
+    title=title,
+    tile_text=tile_text,
+    nodes=nodes,
+    columns=columns,
+    scored=scored,
+  )
 
 
 def L_shape_grid(compressed, size, depth):
@@ -382,14 +419,72 @@ def L_shape_grid(compressed, size, depth):
   board.sort(key=lambda c: c[0] in revealed)  # praise be to Python's stable sort
 
   if not compressed:
-    return num, board, revealed, constraints, None
+    return dict(
+      num=num,
+      board=board,
+      revealed=revealed,
+      constraints=constraints,
+    )
   else:
     result = Puzzle(board, revealed, constraints).solve()
     scored = score(result, 'seqnum')
     title = f'L-shape {size}-{depth} with score {scored}'
     tile_text = 'L'
 
-    return title, tile_text, nodes, columns, colors, scored
+    return dict(
+      title=title,
+      tile_text=tile_text,
+      nodes=nodes,
+      columns=columns,
+      colors=colors,
+      scored=scored,
+    )
+
+
+def clone(compressed, filename):
+  contents = None
+  with open(filename) as f:
+    contents = f.read()
+
+  puzzle, name, reverse_id_map = load(contents)
+  board = puzzle.board
+  revealed = puzzle.revealed
+  constraints = puzzle.og_constraints
+
+  num = len(board)
+  board.sort(key=lambda c: c[0] in revealed)  # praise be to Python's stable sort
+
+  if not compressed:
+    return dict(
+      num=num,
+      board=board,
+      revealed=revealed,
+      constraints=constraints,
+    )
+  else:
+    result = puzzle.solve()
+    scored = score(result, 'seqnum')
+    title = f'Cloned "{name}" with score {scored}'
+    tile_text = 'CLO'
+
+    data = substitute(contents)
+    num_revealed = 0
+    for index, node in enumerate(data['nodes']):
+      if index in revealed:
+        node['revealed'] = True
+        num_revealed += 1
+      else:
+        node['has_mine'] = compressed[index - num_revealed] == '*'
+        node['secret'] = compressed[index - num_revealed] == '?'
+
+    return dict(
+      title=title,
+      tile_text=tile_text,
+      scored=scored,
+      nodes=data['nodes'],
+      columns=data['columns'],
+      colors=data['colors'],
+    )
 
 
 def make_template(method, *args, **kwargs):
@@ -398,6 +493,7 @@ def make_template(method, *args, **kwargs):
     cl_corner_bite=cl_corner_bite,
     holey=holey,
     l_shape_grid=partial(L_shape_grid, None),
+    clone=partial(clone, None),
   )
 
   return methods[method](*args, **kwargs)
@@ -408,7 +504,7 @@ def render_template(method, compressed, *args, **kwargs):
     combination_lock=combination_lock_render,
     cl_corner_bite=cl_corner_bite_render,
     holey=holey_render,
-    l_shape_grid=L_shape_grid,
+    clone=clone,
   )
 
   return methods[method](compressed, *args, **kwargs)

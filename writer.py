@@ -27,15 +27,15 @@ def write_level(board_template, compressed, *template_args, **parameters):
   # render_template takes a template (actually the lookup name) that then gets instantiated
   # according to the compressed string (and any extra args like size) and returns its attributes
   # this does solve the ensuing puzzle in order to give its score
-  title, tile_text, nodes, columns, colors, score = render_template(board_template, compressed, *template_args)
-
-  params['nodes'] = nodes  # describes the cells and their relations with each other
-  params['columns'] = columns  # groups some cells into some number of column hints (in any direction, including horizontal and diagonal) [technically *any* set of cells]
-  params['colors'] = colors  # groups some cells into some number of color hints
+  params = render_template(board_template, compressed, *template_args)
   params['puzzle_id'] = int(time.time())  # there's probably a better way to do this but ids need to be unique, otherwise Tametsi gets confused
-  params['title'] = title  # this is displayed in-game while solving the puzzle
-  params['tile_text'] = tile_text  # this is displayed in-game while choosing a puzzle
-  params['score'] = score  # the computed score of the puzzle
+
+  # params['nodes'] = describes the cells and their relations with each other
+  # params['columns'] = groups some cells into some number of column hints (in any direction, including horizontal and diagonal) [technically *any* set of cells]
+  # params['colors'] = groups some cells into some number of color hints
+  # params['title'] = this is displayed in-game while solving the puzzle
+  # params['tile_text'] = this is displayed in-game while choosing a puzzle
+  # params['score'] = the computed score of the puzzle
 
   # Jinja-render the template file with this info
   level = level_template.render(**params)

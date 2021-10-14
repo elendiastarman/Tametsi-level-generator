@@ -78,6 +78,7 @@ class Puzzle(object):
   def __init__(self, board, revealed, constraints, verbose=False, max_inexact_stages=-1):
     self.board = board
     self.revealed = revealed
+    self.og_constraints = constraints
     self.constraints = self.convert_constraints(constraints)
     self.verbose = verbose
     self.max_inexact_stages = max_inexact_stages

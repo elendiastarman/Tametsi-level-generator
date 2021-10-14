@@ -35,8 +35,8 @@
     <COLUMN_HINT>
       <IDS>{{ column.ids|join(',') }}</IDS>
       <TEXT_LOCATION>{{ column.text_location|join(',') }}</TEXT_LOCATION>
-      <TEXT_ROTATION>0.0</TEXT_ROTATION>
-      <TEXT_SIZE_FACTOR>1.0</TEXT_SIZE_FACTOR>
+      <TEXT_ROTATION>{{ column.text_rotation or 0.0}}</TEXT_ROTATION>
+      <TEXT_SIZE_FACTOR>{{ column.text_size_factor or 1.0}}</TEXT_SIZE_FACTOR>
     </COLUMN_HINT>
     {% endfor %}
   </COLUMN_HINT_LIST>
@@ -51,5 +51,5 @@
   </HINT_LIST>
   <TEXT/>
   <TEXT_POS>0.0,0.0</TEXT_POS>
-  <CORNER_FLAG>true</CORNER_FLAG>
+  <CORNER_FLAG>{{ corner_flag or True}}</CORNER_FLAG>
 </PUZZLE>
