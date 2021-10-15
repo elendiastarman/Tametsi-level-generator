@@ -42,7 +42,7 @@ def write_level(board_template, compressed, *template_args, **parameters):
 
   # vvv This just makes a unique filename
   today = datetime.datetime.strftime(datetime.datetime.now(), '%Y%m%d')
-  filename_safe_title = params['title'].replace(' ', '-')
+  filename_safe_title = params['title'].replace(' ', '-').replace('"', '_')
 
   name = f'puzzles/{today}_{filename_safe_title}.puz'
   print(name)

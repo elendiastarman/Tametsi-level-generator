@@ -462,6 +462,18 @@ def clone(compressed, filename):
       constraints=constraints,
     )
   else:
+    mapped = dict()
+    for index, what in enumerate(compressed):
+      board[index][1] = what
+      mapped[board[index][0]] = what
+
+    for r in revealed:
+      mapped[r] = '.'
+
+    for constraint in constraints:
+      constraint[0] = sum([mapped[i] == '*' for i in constraint[1]])
+
+    puzzle = Puzzle(board, revealed, constraints)
     result = puzzle.solve()
     scored = score(result, 'seqnum')
     title = f'Cloned "{name}" with score {scored}'
