@@ -5,23 +5,11 @@ import operator
 
 from solver import Puzzle
 from scorer import score
-from templater import make_template
+from templater import make_template, replace_cells
 
 
 def score_candidate(board, revealed, constraints, compressed, score_method, verbose=False):
-  board.sort(key=lambda x: x[0] in revealed)
-
-  mapped = dict()
-  for index, what in enumerate(compressed):
-    board[index][1] = what
-    mapped[board[index][0]] = what
-
-  for r in revealed:
-    mapped[r] = '.'
-
-  for constraint in constraints:
-    constraint[0] = sum([mapped[i] == '*' for i in constraint[1]])
-
+  replace_cells(board, revealed, constraints, compressed)
   puzzle = Puzzle(board, revealed, constraints, verbose=verbose, max_inexact_stages=1)
   result = puzzle.solve()
   return score(result, score_method), result

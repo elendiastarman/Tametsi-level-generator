@@ -1,7 +1,7 @@
 from functools import partial
 from solver import Puzzle
 from scorer import score
-from loader import load, substitute
+from loader import load, extract
 
 
 def combination_lock(size):
@@ -462,24 +462,14 @@ def clone(compressed, filename):
       constraints=constraints,
     )
   else:
-    mapped = dict()
-    for index, what in enumerate(compressed):
-      board[index][1] = what
-      mapped[board[index][0]] = what
-
-    for r in revealed:
-      mapped[r] = '.'
-
-    for constraint in constraints:
-      constraint[0] = sum([mapped[i] == '*' for i in constraint[1]])
-
+    replace_cells(board, revealed, constraints, compressed)
     puzzle = Puzzle(board, revealed, constraints)
     result = puzzle.solve()
     scored = score(result, 'seqnum')
     title = f'Cloned "{name}" with score {scored}'
     tile_text = 'CLO'
 
-    data = substitute(contents)
+    data = extract(contents)
     num_revealed = 0
     for index, node in enumerate(data['nodes']):
       if index in revealed:
@@ -497,6 +487,19 @@ def clone(compressed, filename):
       columns=data['columns'],
       colors=data['colors'],
     )
+
+
+def replace_cells(board, revealed, constraints, compressed):
+  mapped = dict()
+  for index, what in enumerate(compressed):
+    board[index][1] = what
+    mapped[board[index][0]] = what
+
+  for r in revealed:
+    mapped[r] = '.'
+
+  for constraint in constraints:
+    constraint[0] = sum([mapped[i] == '*' for i in constraint[1]])
 
 
 def make_template(method, *args, **kwargs):

@@ -90,9 +90,8 @@ def load(contents, verbose=False):
   return Puzzle(board, revealed, constraints, verbose=verbose), name, reverse_id_map
 
 
-def substitute(contents, verbose=False):
-  """Takes a puzzle file and pulls nodes, column hints,
-  and color hints out of it with new data substituted in"""
+def extract(contents, verbose=False):
+  """Takes a puzzle file and pulls nodes, column hints, and color hints out of it"""
   nodes = []
 
   # Not parsing arbitrary XML here!
